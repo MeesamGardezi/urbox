@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "897703212804",
+    "project_id": "urbox-1",
+    "storage_bucket": "urbox-1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:897703212804:android:3ef218c83e7da69fce0251",
+        "android_client_info": {
+          "package_name": "com.example.frontend"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBI9K7mmtjGENVaCL476hgupCCew9orUec"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

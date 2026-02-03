@@ -1,0 +1,46 @@
+# OS / System
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# IDEs and Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+*.sublime-project
+*.sublime-workspace
+
+# Node.js (Backend)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+.env.*.local
+backend/firebase-service-account.json
+
+# Flutter / Dart (Frontend)
+# (Note: frontend/.gitignore may already handle these, but including them here is safe)
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+frontend/build/
+ios/Flutter/Generated.xcconfig
+ios/Flutter/flutter_export_environment.sh
+.pub-cache/
+.pub/
+
+# Logs
+logs
+*.log
+
+# Misc
+.cache/
+tmp/
