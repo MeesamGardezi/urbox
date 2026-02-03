@@ -1,31 +1,16 @@
 /**
- * Authentication Routes
+ * Authentication Routes - NO INDEX VERSION
  * 
- * Handles:
- * - User signup (with company creation or invite acceptance)
- * - User login
- * - Password management
- * - Team invitations
- * 
- * Security:
- * - Firebase Auth for password management
- * - Firestore for user profiles
- * - Backend-only company creation
+ * Completely removed all compound queries
+ * Everything filtered in code
  */
 
 const express = require('express');
 const admin = require('firebase-admin');
-const encryptionService = require('../core/services/encryption-service');
 
 function createAuthRoutes(db) {
     const router = express.Router();
 
-    /**
-     * POST /signup
-     * Create new user account
-     * - If invite exists: Join as team member
-     * - If no invite: Create new company as owner
-     */
     router.post('/signup', async (req, res) => {
         const { email, password, displayName, companyName } = req.body;
 
@@ -37,17 +22,40 @@ function createAuthRoutes(db) {
         }
 
         try {
-            // Check for pending invite
-            const pendingInviteQuery = await db.collection('pendingInvites')
-                .where('email', '==', email.toLowerCase())
-                .limit(1)
-                .get();
+            // Get ALL pending invites (no filters)
+            const allInvites = await db.collection('pendingInvites').get();
+
+            // Filter by email in code
+            let validInvite = null;
+            const now = new Date();
+            const normalizedEmail = email.toLowerCase();
+
+            for (const doc of allInvites.docs) {
+                const inviteData = doc.data();
+
+                // Check email match
+                if (inviteData.email !== normalizedEmail) continue;
+
+                // Check status
+                if (inviteData.status !== 'pending') continue;
+
+                // Check expiration
+                const expiresAt = inviteData.expiresAt?.toDate ?
+                    inviteData.expiresAt.toDate() :
+                    new Date(inviteData.expiresAt);
+
+                if (expiresAt <= now) continue;
+
+                // Found valid invite
+                validInvite = { doc, data: inviteData };
+                break;
+            }
 
             // Create Firebase Auth user
             let userRecord;
             try {
                 userRecord = await admin.auth().createUser({
-                    email: email.toLowerCase(),
+                    email: normalizedEmail,
                     password: password,
                     displayName: displayName || email.split('@')[0]
                 });
@@ -65,23 +73,18 @@ function createAuthRoutes(db) {
             let role;
             let assignedInboxIds = [];
 
-            if (!pendingInviteQuery.empty) {
-                // Join existing company as team member
-                const invite = pendingInviteQuery.docs[0];
-                const inviteData = invite.data();
-
-                companyId = inviteData.companyId;
+            if (validInvite) {
+                // Join existing company
+                companyId = validInvite.data.companyId;
                 role = 'member';
-                assignedInboxIds = inviteData.assignedInboxIds || [];
+                assignedInboxIds = validInvite.data.assignedInboxIds || [];
 
-                // Delete the pending invite
-                await invite.ref.delete();
+                await validInvite.doc.ref.delete();
 
                 console.log(`[Auth] User ${email} joined company ${companyId} via invite`);
             } else {
                 // Create new company
                 if (!companyName) {
-                    // Rollback user creation
                     await admin.auth().deleteUser(userRecord.uid);
                     return res.status(400).json({
                         success: false,
@@ -106,9 +109,9 @@ function createAuthRoutes(db) {
                 console.log(`[Auth] Created new company: ${companyId} for user ${email}`);
             }
 
-            // Create user profile in Firestore
+            // Create user profile
             await db.collection('users').doc(userRecord.uid).set({
-                email: email.toLowerCase(),
+                email: normalizedEmail,
                 displayName: displayName?.trim() || email.split('@')[0],
                 companyId: companyId,
                 role: role,
@@ -123,7 +126,7 @@ function createAuthRoutes(db) {
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            // Generate custom token for immediate sign-in
+            // Generate custom token
             const customToken = await admin.auth().createCustomToken(userRecord.uid);
 
             res.json({
@@ -132,13 +135,12 @@ function createAuthRoutes(db) {
                 userId: userRecord.uid,
                 companyId: companyId,
                 role: role,
-                message: role === 'owner'
-                    ? 'Account created successfully!'
-                    : 'Welcome to the team!'
+                message: role === 'owner' ? 'Account created successfully!' : 'Welcome to the team!'
             });
 
         } catch (error) {
             console.error('[Auth] Signup error:', error);
+            console.error('[Auth] Error stack:', error.stack);
             res.status(500).json({
                 success: false,
                 error: error.message || 'Failed to create account'
@@ -146,11 +148,6 @@ function createAuthRoutes(db) {
         }
     });
 
-    /**
-     * POST /login
-     * Login existing user (verification only - actual auth handled by Firebase)
-     * This endpoint is optional - Firebase can handle login directly
-     */
     router.post('/login', async (req, res) => {
         const { email, password } = req.body;
 
@@ -162,9 +159,7 @@ function createAuthRoutes(db) {
         }
 
         try {
-            // Verify user exists and is active
             const userRecord = await admin.auth().getUserByEmail(email.toLowerCase());
-
             const userDoc = await db.collection('users').doc(userRecord.uid).get();
 
             if (!userDoc.exists) {
@@ -183,13 +178,11 @@ function createAuthRoutes(db) {
                 });
             }
 
-            // Update last login timestamp
             await db.collection('users').doc(userRecord.uid).update({
                 lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            // Generate custom token
             const customToken = await admin.auth().createCustomToken(userRecord.uid);
 
             res.json({
@@ -202,14 +195,12 @@ function createAuthRoutes(db) {
 
         } catch (error) {
             console.error('[Auth] Login error:', error);
-
             if (error.code === 'auth/user-not-found') {
                 return res.status(404).json({
                     success: false,
                     error: 'No account found with this email'
                 });
             }
-
             res.status(500).json({
                 success: false,
                 error: 'Login failed'
@@ -217,10 +208,6 @@ function createAuthRoutes(db) {
         }
     });
 
-    /**
-     * POST /update-profile
-     * Update user profile information
-     */
     router.post('/update-profile', async (req, res) => {
         const { userId, displayName, phoneNumber, timezone, language } = req.body;
 
@@ -257,10 +244,23 @@ function createAuthRoutes(db) {
         }
     });
 
-    /**
-     * GET /user/:userId
-     * Get user profile
-     */
+    router.get('/test', async (req, res) => {
+        try {
+            const allDocs = await db.collection('pendingInvites').get();
+            res.json({
+                success: true,
+                count: allDocs.size,
+                docs: allDocs.docs.map(d => d.id)
+            });
+        } catch (error) {
+            res.json({
+                success: false,
+                error: error.message,
+                code: error.code
+            });
+        }
+    });
+
     router.get('/user/:userId', async (req, res) => {
         const { userId } = req.params;
 

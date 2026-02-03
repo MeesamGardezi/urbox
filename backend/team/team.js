@@ -3,6 +3,7 @@
  * 
  * Handles:
  * - Sending team invitations
+ * - Checking for pending invitations
  * - Accepting invitations
  * - Managing team members
  * - Updating member permissions
@@ -135,6 +136,77 @@ function createTeamRoutes(db) {
     });
 
     /**
+     * POST /check-invite
+     * Check if an email has a pending invitation
+     * Uses simpler query to avoid Firestore index requirements
+     */
+    router.post('/check-invite', async (req, res) => {
+        const { email } = req.body;
+
+        if (!email) {
+            return res.json({
+                hasPendingInvite: false,
+                error: 'Email is required'
+            });
+        }
+
+        try {
+            // Get all pending invites for this email
+            const inviteQuery = await db.collection('pendingInvites')
+                .where('email', '==', email.toLowerCase())
+                .get();
+
+            if (inviteQuery.empty) {
+                return res.json({
+                    hasPendingInvite: false
+                });
+            }
+
+            // Filter in code for status and expiration
+            let validInvite = null;
+            const now = new Date();
+
+            for (const doc of inviteQuery.docs) {
+                const invite = doc.data();
+
+                // Check status
+                if (invite.status !== 'pending') continue;
+
+                // Check expiration
+                const expiresAt = invite.expiresAt?.toDate ?
+                    invite.expiresAt.toDate() :
+                    new Date(invite.expiresAt);
+
+                if (expiresAt < now) continue;
+
+                // Found valid invite
+                validInvite = invite;
+                break;
+            }
+
+            if (!validInvite) {
+                return res.json({
+                    hasPendingInvite: false
+                });
+            }
+
+            res.json({
+                hasPendingInvite: true,
+                companyName: validInvite.companyName || 'Your Team',
+                inviterName: validInvite.inviterName || 'Team Owner',
+                token: validInvite.inviteToken
+            });
+
+        } catch (error) {
+            console.error('[Team] Check invite error:', error);
+            // Return false instead of error to not disrupt signup flow
+            res.json({
+                hasPendingInvite: false
+            });
+        }
+    });
+
+    /**
      * GET /invite/:token
      * Get invitation details
      */
@@ -157,7 +229,7 @@ function createTeamRoutes(db) {
             const invite = inviteQuery.docs[0].data();
 
             // Check if expired
-            const expiresAt = invite.expiresAt.toDate();
+            const expiresAt = invite.expiresAt.toDate ? invite.expiresAt.toDate() : new Date(invite.expiresAt);
             if (expiresAt < new Date()) {
                 return res.status(410).json({
                     success: false,
@@ -214,7 +286,7 @@ function createTeamRoutes(db) {
             const invite = inviteDoc.data();
 
             // Check if expired
-            const expiresAt = invite.expiresAt.toDate();
+            const expiresAt = invite.expiresAt.toDate ? invite.expiresAt.toDate() : new Date(invite.expiresAt);
             if (expiresAt < new Date()) {
                 return res.status(410).json({
                     success: false,
@@ -332,7 +404,7 @@ function createTeamRoutes(db) {
 
     function getInviteUrl(token) {
         const baseUrl = process.env.APP_URL || 'http://localhost:8080';
-        return `${baseUrl}/accept-invite/${token}`;
+        return `${baseUrl}/auth?invite=${token}`;
     }
 
     async function sendInvitationEmail({ to, inviterName, companyName, token, inboxCount }) {

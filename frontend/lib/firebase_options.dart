@@ -44,6 +44,7 @@ class DefaultFirebaseOptions {
     projectId: "urbox-1",
     storageBucket: "urbox-1.firebasestorage.app",
     messagingSenderId: "897703212804",
-    appId: "1:897703212804:web:fa63602371e329c5ce0251",
+    appId: "1:897703212804:web:37ad9da2d61544c2ce0251",
+    measurementId: "G-52WPN2JTE8",
   );
 }

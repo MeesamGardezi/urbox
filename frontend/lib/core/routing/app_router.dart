@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import '../../auth/screens/accept_invite_screen.dart';
-import '../../auth/screens/login_screen.dart';
-import '../../auth/screens/signup_screen.dart';
+import '../../auth/screens/auth_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/settings_screen.dart';
@@ -14,54 +12,44 @@ import '../screens/settings_screen.dart';
 /// Handles all routing with authentication guards
 class AppRouter {
   static final GoRouter router = GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/auth',
     redirect: (context, state) {
       final user = FirebaseAuth.instance.currentUser;
       final isLoggedIn = user != null;
-      final isLoggingIn =
-          state.matchedLocation == '/login' ||
-          state.matchedLocation == '/signup';
-      final isAcceptingInvite = state.matchedLocation.startsWith(
-        '/accept-invite',
-      );
+      final isOnAuthPage = state.matchedLocation.startsWith('/auth');
 
-      // Allow access to accept-invite page without authentication
-      if (isAcceptingInvite) {
-        return null;
+      // Not logged in and not on auth page -> redirect to auth
+      if (!isLoggedIn && !isOnAuthPage) {
+        return '/auth';
       }
 
-      // Not logged in and not on auth pages -> redirect to login
-      if (!isLoggedIn && !isLoggingIn) {
-        return '/login';
-      }
-
-      // Logged in and on auth pages -> redirect to dashboard
-      if (isLoggedIn && isLoggingIn) {
+      // Logged in and on auth page -> redirect to dashboard
+      if (isLoggedIn && isOnAuthPage) {
         return '/dashboard';
       }
 
       return null;
     },
     routes: [
-      // Authentication Routes
+      // Unified Authentication Route
       GoRoute(
-        path: '/login',
-        name: 'login',
-        builder: (context, state) => const LoginScreen(),
+        path: '/auth',
+        name: 'auth',
+        builder: (context, state) {
+          // Check for invite token in query parameters
+          final inviteToken = state.uri.queryParameters['invite'];
+          return AuthScreen(inviteToken: inviteToken);
+        },
       ),
 
-      GoRoute(
-        path: '/signup',
-        name: 'signup',
-        builder: (context, state) => const SignupScreen(),
-      ),
-
+      // Legacy routes for backward compatibility (redirect to unified auth)
+      GoRoute(path: '/login', redirect: (context, state) => '/auth'),
+      GoRoute(path: '/signup', redirect: (context, state) => '/auth'),
       GoRoute(
         path: '/accept-invite/:token',
-        name: 'acceptInvite',
-        builder: (context, state) {
-          final token = state.pathParameters['token'] ?? '';
-          return AcceptInviteScreen(token: token);
+        redirect: (context, state) {
+          final token = state.pathParameters['token'];
+          return '/auth?invite=$token';
         },
       ),
 

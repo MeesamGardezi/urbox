@@ -6,7 +6,7 @@ import '../../core/config/app_config.dart';
 ///
 /// Handles team invitations and member management
 class TeamService {
-  static const String _baseUrl = '${AppConfig.teamEndpoint}';
+  static const String _baseUrl = AppConfig.teamEndpoint;
 
   /// Send invitation to join team
   /// Returns: {success, inviteToken, emailSent, message}
@@ -46,6 +46,27 @@ class TeamService {
       return json.decode(response.body);
     } catch (e) {
       return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Check if an email has a pending invite
+  /// Returns: {hasPendingInvite, companyName, inviterName, token}
+  static Future<Map<String, dynamic>> checkPendingInvite(String email) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/check-invite'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'email': email.toLowerCase().trim()}),
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      } else {
+        return {'hasPendingInvite': false, 'error': 'Failed to check invite'};
+      }
+    } catch (e) {
+      // Return false instead of error to avoid disrupting signup flow
+      return {'hasPendingInvite': false};
     }
   }
 
