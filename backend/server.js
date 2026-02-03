@@ -34,9 +34,15 @@ if (missingEnvVars.length > 0) {
 }
 
 // Initialize Firebase Admin
+let db;
+
 if (!admin.apps.length) {
     try {
         const serviceAccount = require('./firebase-service-account.json');
+
+        console.log(`\n🔧 Firebase Configuration:`);
+        console.log(`   Project ID: ${serviceAccount.project_id}`);
+        console.log(`   Client Email: ${serviceAccount.client_email}`);
 
         admin.initializeApp({
             credential: admin.credential.cert(serviceAccount),
@@ -51,7 +57,63 @@ if (!admin.apps.length) {
     }
 }
 
-const db = admin.firestore();
+// Initialize Firestore with explicit settings
+db = admin.firestore();
+
+// Set Firestore settings to avoid gRPC issues
+db.settings({
+    ignoreUndefinedProperties: true,
+    databaseId: 'default'
+});
+
+// Function to verify Firestore connection
+async function verifyFirestoreConnection() {
+    console.log('\n🔍 Verifying Firestore connection...');
+
+    try {
+        // Try a simple write/read to verify connection
+        const testDocRef = db.collection('_connection_test').doc('test');
+
+        await testDocRef.set({
+            timestamp: admin.firestore.FieldValue.serverTimestamp(),
+            test: true
+        });
+
+        const testDoc = await testDocRef.get();
+
+        if (testDoc.exists) {
+            console.log('✓ Firestore connection verified successfully!');
+            // Clean up test document
+            await testDocRef.delete();
+            return true;
+        } else {
+            console.error('❌ Firestore test document was not created');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Firestore connection failed!');
+        console.error(`   Error Code: ${error.code}`);
+        console.error(`   Error Message: ${error.message}`);
+
+        if (error.code === 5 || error.message.includes('NOT_FOUND')) {
+            console.error('\n💡 SOLUTION: The Firestore database does not exist.');
+            console.error('   1. Go to Firebase Console: https://console.firebase.google.com');
+            console.error('   2. Select your project');
+            console.error('   3. Click "Firestore Database" in the sidebar');
+            console.error('   4. Click "Create database"');
+            console.error('   5. Choose a location and security rules');
+            console.error('   6. Restart this server\n');
+        } else if (error.code === 7 || error.message.includes('PERMISSION_DENIED')) {
+            console.error('\n💡 SOLUTION: Permission denied.');
+            console.error('   1. Check your Firestore security rules');
+            console.error('   2. Verify the service account has correct permissions');
+            console.error('   3. In Firebase Console > Project Settings > Service Accounts');
+            console.error('   4. Ensure the service account has "Firebase Admin SDK" role\n');
+        }
+
+        return false;
+    }
+}
 
 // Import routes
 const createAuthRoutes = require('./auth/auth');
@@ -77,13 +139,24 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint with Firestore status
+app.get('/health', async (req, res) => {
+    let firestoreStatus = 'unknown';
+
+    try {
+        // Quick Firestore check
+        await db.collection('_health').doc('check').get();
+        firestoreStatus = 'connected';
+    } catch (error) {
+        firestoreStatus = `error: ${error.code || error.message}`;
+    }
+
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
-        environment: process.env.NODE_ENV || 'development'
+        environment: process.env.NODE_ENV || 'development',
+        firestore: firestoreStatus
     });
 });
 
@@ -112,30 +185,45 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log('\n==========================================================');
-    console.log('         SHARED MAILBOX BACKEND');
-    console.log('==========================================================');
-    console.log(`✓ Server running on port ${PORT}`);
-    console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`✓ App URL: ${process.env.APP_URL || 'http://localhost:8080'}`);
-    console.log('\n📡 Available endpoints:');
-    console.log('   GET  /health');
-    console.log('   POST /api/auth/signup');
-    console.log('   POST /api/auth/login');
-    console.log('   POST /api/team/invite');
-    console.log('   POST /api/team/accept-invite');
-    console.log('   GET  /api/subscription/check-access');
-    console.log('   GET  /api/subscription/plan');
-    console.log('   POST /api/payment/create-checkout-session');
-    console.log('   POST /api/payment/create-portal-session');
-    console.log('\n🔐 Admin endpoints:');
-    console.log('   POST /api/subscription/admin/grant-pro-free');
-    console.log('   POST /api/subscription/admin/revoke-pro-free');
-    console.log('   GET  /api/subscription/admin/list-pro-free');
-    console.log('\n==========================================================\n');
-});
+// Start server with Firestore verification
+async function startServer() {
+    // Verify Firestore connection before starting
+    const firestoreOk = await verifyFirestoreConnection();
+
+    if (!firestoreOk) {
+        console.error('\n❌ Server startup aborted due to Firestore connection failure.');
+        console.error('   Please fix the Firestore configuration and try again.\n');
+        process.exit(1);
+    }
+
+    app.listen(PORT, () => {
+        console.log('\n==========================================================');
+        console.log('         SHARED MAILBOX BACKEND');
+        console.log('==========================================================');
+        console.log(`✓ Server running on port ${PORT}`);
+        console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
+        console.log(`✓ App URL: ${process.env.APP_URL || 'http://localhost:8080'}`);
+        console.log(`✓ Firestore: Connected`);
+        console.log('\n📡 Available endpoints:');
+        console.log('   GET  /health');
+        console.log('   POST /api/auth/signup');
+        console.log('   POST /api/auth/login');
+        console.log('   POST /api/team/invite');
+        console.log('   POST /api/team/accept-invite');
+        console.log('   GET  /api/subscription/check-access');
+        console.log('   GET  /api/subscription/plan');
+        console.log('   POST /api/payment/create-checkout-session');
+        console.log('   POST /api/payment/create-portal-session');
+        console.log('\n🔐 Admin endpoints:');
+        console.log('   POST /api/subscription/admin/grant-pro-free');
+        console.log('   POST /api/subscription/admin/revoke-pro-free');
+        console.log('   GET  /api/subscription/admin/list-pro-free');
+        console.log('\n==========================================================\n');
+    });
+}
+
+// Start the server
+startServer();
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

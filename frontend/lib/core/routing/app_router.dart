@@ -31,6 +31,8 @@ class AppRouter {
       return null;
     },
     routes: [
+      GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
+
       // Unified Authentication Route
       GoRoute(
         path: '/auth',

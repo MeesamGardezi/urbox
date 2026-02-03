@@ -195,7 +195,7 @@ class _AuthScreenState extends State<AuthScreen>
       );
 
       if (mounted) {
-        context.go('/');
+        context.go('/dashboard');
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -223,7 +223,7 @@ class _AuthScreenState extends State<AuthScreen>
         );
 
         if (mounted) {
-          context.go('/');
+          context.go('/dashboard');
         }
       } else {
         setState(() {
@@ -257,7 +257,7 @@ class _AuthScreenState extends State<AuthScreen>
               backgroundColor: AppTheme.success,
             ),
           );
-          context.go('/');
+          context.go('/dashboard');
         }
       } else {
         setState(() {

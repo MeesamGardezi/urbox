@@ -10,6 +10,10 @@ try {
         credential: admin.credential.cert(serviceAccount),
         projectId: serviceAccount.project_id,
     });
+    console.log('Firebase Admin initialized');
+    console.log('Project ID: ', serviceAccount.project_id);
+    console.log('Service Account: ', serviceAccount);
+
 
     const db = admin.firestore();
 

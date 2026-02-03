@@ -22,33 +22,32 @@ function createAuthRoutes(db) {
         }
 
         try {
-            // Get ALL pending invites (no filters)
-            const allInvites = await db.collection('pendingInvites').get();
-
-            // Filter by email in code
             let validInvite = null;
             const now = new Date();
             const normalizedEmail = email.toLowerCase();
 
-            for (const doc of allInvites.docs) {
-                const inviteData = doc.data();
+            // Check for pending invites - handle missing collection gracefully
+            try {
+                const allInvites = await db.collection('pendingInvites').get();
 
-                // Check email match
-                if (inviteData.email !== normalizedEmail) continue;
+                for (const doc of allInvites.docs) {
+                    const inviteData = doc.data();
 
-                // Check status
-                if (inviteData.status !== 'pending') continue;
+                    if (inviteData.email !== normalizedEmail) continue;
+                    if (inviteData.status !== 'pending') continue;
 
-                // Check expiration
-                const expiresAt = inviteData.expiresAt?.toDate ?
-                    inviteData.expiresAt.toDate() :
-                    new Date(inviteData.expiresAt);
+                    const expiresAt = inviteData.expiresAt?.toDate ?
+                        inviteData.expiresAt.toDate() :
+                        new Date(inviteData.expiresAt);
 
-                if (expiresAt <= now) continue;
+                    if (expiresAt <= now) continue;
 
-                // Found valid invite
-                validInvite = { doc, data: inviteData };
-                break;
+                    validInvite = { doc, data: inviteData };
+                    break;
+                }
+            } catch (inviteError) {
+                console.log('[Auth] Pending invites check skipped:', inviteError.message);
+                // Continue without invite - user will create new company
             }
 
             // Create Firebase Auth user
@@ -79,7 +78,11 @@ function createAuthRoutes(db) {
                 role = 'member';
                 assignedInboxIds = validInvite.data.assignedInboxIds || [];
 
-                await validInvite.doc.ref.delete();
+                try {
+                    await validInvite.doc.ref.delete();
+                } catch (deleteError) {
+                    console.log('[Auth] Failed to delete invite:', deleteError.message);
+                }
 
                 console.log(`[Auth] User ${email} joined company ${companyId} via invite`);
             } else {

@@ -26,35 +26,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    if (user == null) return;
+    if (user == null) {
+      if (mounted) {
+        context.go('/auth'); // Redirect if no user
+      }
+      return;
+    }
 
     try {
       // Load user profile
+      print('Loading user profile for ${user!.uid}...');
       final userDoc = await FirebaseFirestore.instance
           .collection('users')
           .doc(user!.uid)
           .get();
 
       if (userDoc.exists) {
+        print('User profile found.');
         _userProfile = UserProfile.fromFirestore(userDoc);
 
         // Load company
+        print('Loading company ${_userProfile!.companyId}...');
         final companyDoc = await FirebaseFirestore.instance
             .collection('companies')
             .doc(_userProfile!.companyId)
             .get();
 
         if (companyDoc.exists) {
+          print('Company found.');
           _company = Company.fromFirestore(companyDoc);
+        } else {
+          print('Company not found.');
         }
+      } else {
+        print('User profile not found.');
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
       }
     } catch (e) {
+      print('Error loading dashboard data: $e');
       if (mounted) {
         setState(() => _isLoading = false);
+        // Optionally show error snackbar
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to load data: $e')));
       }
     }
   }
