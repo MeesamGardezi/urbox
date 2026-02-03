@@ -18,6 +18,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   UserProfile? _userProfile;
   Company? _company;
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -68,7 +69,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       print('Error loading dashboard data: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+          _loadError = e.toString();
+        });
         // Optionally show error snackbar
         ScaffoldMessenger.of(
           context,
@@ -101,6 +105,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
+          : _userProfile == null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  const Text('Failed to load dashboard data'),
+                  if (_loadError != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      _loadError!,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        _isLoading = true;
+                        _loadError = null;
+                      });
+                      _loadData();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
           : SingleChildScrollView(
               padding: const EdgeInsets.all(AppTheme.spacing6),
               child: Center(

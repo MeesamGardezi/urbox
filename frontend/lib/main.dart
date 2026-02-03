@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'firebase_options.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -10,6 +11,19 @@ void main() async {
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Configure Firestore
+  // Configure Firestore
+  // Using defaults for web to avoid offline errors
+  // if (kIsWeb) {
+  //   try {
+  //     FirebaseFirestore.instance.settings = const Settings(
+  //       persistenceEnabled: false,
+  //     );
+  //   } catch (e) {
+  //     debugPrint("Error setting Firestore settings: $e");
+  //   }
+  // }
 
   runApp(const MyApp());
 }
