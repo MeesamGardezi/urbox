@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../theme/app_theme.dart';
 import '../models/company.dart';
 import '../models/user_profile.dart';
+import '../../auth/services/auth_service.dart';
+import '../services/subscription_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -26,59 +27,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadData();
   }
 
+  /// Helper to parse DateTime from various formats (Firestore Timestamp, ISO string, or Map)
+  DateTime _parseDateTime(dynamic value) {
+    if (value == null) return DateTime.now();
+
+    if (value is DateTime) return value;
+
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime.now();
+    }
+
+    // Handle Firestore Timestamp returned as Map: {_seconds: xxx, _nanoseconds: xxx}
+    if (value is Map) {
+      final seconds = value['_seconds'] ?? value['seconds'] ?? 0;
+      final nanoseconds = value['_nanoseconds'] ?? value['nanoseconds'] ?? 0;
+      return DateTime.fromMillisecondsSinceEpoch(
+        (seconds * 1000) + (nanoseconds ~/ 1000000),
+      );
+    }
+
+    return DateTime.now();
+  }
+
   Future<void> _loadData() async {
     if (user == null) {
       if (mounted) {
-        context.go('/auth'); // Redirect if no user
+        context.go('/auth');
       }
       return;
     }
 
     try {
-      // Load user profile
-      print('Loading user profile for ${user!.uid}...');
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
+      debugPrint('Loading user profile for ${user!.uid} via API...');
 
-      if (userDoc.exists) {
-        print('User profile found.');
-        _userProfile = UserProfile.fromFirestore(userDoc);
+      // Fetch user profile through backend API
+      final userResponse = await AuthService.getUserProfile(user!.uid);
 
-        // Load company
-        print('Loading company ${_userProfile!.companyId}...');
-        final companyDoc = await FirebaseFirestore.instance
-            .collection('companies')
-            .doc(_userProfile!.companyId)
-            .get();
+      if (userResponse['success'] != true) {
+        throw Exception(userResponse['error'] ?? 'Failed to load user profile');
+      }
 
-        if (companyDoc.exists) {
-          print('Company found.');
-          _company = Company.fromFirestore(companyDoc);
+      final userData = userResponse['user'] as Map<String, dynamic>;
+      debugPrint('User profile loaded: ${userData['displayName']}');
+
+      // Create UserProfile from API response with proper type handling
+      _userProfile = UserProfile(
+        id: userData['id']?.toString() ?? user!.uid,
+        email: userData['email']?.toString() ?? '',
+        displayName: userData['displayName']?.toString() ?? '',
+        companyId: userData['companyId']?.toString() ?? '',
+        role: userData['role']?.toString() ?? 'member',
+        assignedInboxIds: List<String>.from(userData['assignedInboxIds'] ?? []),
+        status: userData['status']?.toString() ?? 'active',
+        createdAt: _parseDateTime(userData['createdAt']),
+        updatedAt: _parseDateTime(userData['updatedAt']),
+        mfaEnabled: userData['mfaEnabled'] == true,
+        phoneNumber: userData['phoneNumber']?.toString(),
+        timezone: userData['timezone']?.toString(),
+        language: userData['language']?.toString(),
+      );
+
+      // Fetch company/subscription data through backend API
+      if (_userProfile!.companyId.isNotEmpty) {
+        debugPrint('Loading company ${_userProfile!.companyId} via API...');
+
+        final companyResponse = await SubscriptionService.getCompanyPlan(
+          _userProfile!.companyId,
+        );
+
+        if (companyResponse['success'] == true) {
+          debugPrint('Company data loaded');
+
+          // Create Company from API response
+          _company = Company(
+            id: _userProfile!.companyId,
+            name: companyResponse['companyName']?.toString() ?? 'Your Company',
+            ownerId: '',
+            plan: companyResponse['plan']?.toString() ?? 'free',
+            isFree: companyResponse['isFree'] == true,
+            isProFree: companyResponse['isProFree'] == true,
+            subscriptionStatus:
+                companyResponse['subscriptionStatus']?.toString() ?? 'none',
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          );
         } else {
-          print('Company not found.');
+          debugPrint('Company not found - continuing without company data');
         }
-      } else {
-        print('User profile not found.');
       }
 
       if (mounted) {
         setState(() => _isLoading = false);
       }
     } catch (e) {
-      print('Error loading dashboard data: $e');
+      debugPrint('Error loading dashboard data: $e');
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _loadError = e.toString();
+          _loadError = e.toString().replaceAll('Exception: ', '');
         });
-        // Optionally show error snackbar
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load data: $e')));
       }
     }
+  }
+
+  Future<void> _retryLoad() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+      _userProfile = null;
+      _company = null;
+    });
+    await _loadData();
   }
 
   @override
@@ -87,7 +146,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: Text('Dashboard', style: AppTheme.headingMd),
         actions: [
-          // Plans button
           if (_company != null && _company!.canUpgrade)
             TextButton.icon(
               onPressed: () => context.push('/plans'),
@@ -95,76 +153,91 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: const Text('Upgrade to Pro'),
               style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
             ),
-
-          // Settings button
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             onPressed: () => context.push('/settings'),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _userProfile == null
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                  const SizedBox(height: 16),
-                  const Text('Failed to load dashboard data'),
-                  if (_loadError != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _loadError!,
-                      style: const TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        _isLoading = true;
-                        _loadError = null;
-                      });
-                      _loadData();
-                    },
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Retry'),
-                  ),
-                ],
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Loading your dashboard...'),
+          ],
+        ),
+      );
+    }
+
+    if (_loadError != null || _userProfile == null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off, size: 64, color: Colors.orange),
+              const SizedBox(height: 16),
+              Text(
+                'Unable to load dashboard',
+                style: AppTheme.headingMd,
+                textAlign: TextAlign.center,
               ),
-            )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(AppTheme.spacing6),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1200),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Welcome Section
-                      _buildWelcomeSection(),
-
-                      const SizedBox(height: AppTheme.spacing8),
-
-                      // Plan Status Card
-                      if (_company != null) _buildPlanStatusCard(),
-
-                      const SizedBox(height: AppTheme.spacing6),
-
-                      // Quick Stats
-                      _buildQuickStats(),
-
-                      const SizedBox(height: AppTheme.spacing8),
-
-                      // Getting Started
-                      _buildGettingStarted(),
-                    ],
-                  ),
-                ),
+              const SizedBox(height: 8),
+              Text(
+                _loadError ?? 'Failed to load user data',
+                style: AppTheme.bodySm.copyWith(color: AppTheme.textMuted),
+                textAlign: TextAlign.center,
               ),
-            ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _retryLoad,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () async {
+                  await FirebaseAuth.instance.signOut();
+                  if (mounted) {
+                    context.go('/auth');
+                  }
+                },
+                child: const Text('Sign out and try again'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppTheme.spacing6),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildWelcomeSection(),
+              const SizedBox(height: AppTheme.spacing8),
+              if (_company != null) _buildPlanStatusCard(),
+              const SizedBox(height: AppTheme.spacing6),
+              _buildQuickStats(),
+              const SizedBox(height: AppTheme.spacing8),
+              _buildGettingStarted(),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -199,7 +272,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: AppTheme.spacing1),
                   Text(
-                    _company?.name ?? 'Loading...',
+                    _company?.name ?? 'Your Company',
                     style: AppTheme.bodySm.copyWith(color: AppTheme.textMuted),
                   ),
                 ],

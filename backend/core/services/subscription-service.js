@@ -54,6 +54,7 @@ class SubscriptionService {
 
     /**
      * Get detailed company plan information
+     * Now includes companyName for dashboard display
      */
     async getCompanyPlan(companyId) {
         try {
@@ -67,6 +68,7 @@ class SubscriptionService {
             const hasProAccess = await this.hasProAccess(companyId);
 
             return {
+                companyName: data.name || 'Your Company',  // Added for dashboard
                 plan: data.plan || 'free',
                 isFree: data.isFree !== false,
                 isProFree: data.isProFree === true,
@@ -85,23 +87,29 @@ class SubscriptionService {
      * Grant Pro-Free status (special forever-free pro access)
      * 🔐 ADMIN ONLY - Use for VIP customers, partners, etc.
      */
-    async grantProFree(companyId, reason = 'Manual grant') {
+    async grantProFree(companyId, grantedBy = 'admin') {
         try {
-            await this.db.collection('companies').doc(companyId).update({
+            const docRef = this.db.collection('companies').doc(companyId);
+            const doc = await docRef.get();
+
+            if (!doc.exists) {
+                throw new Error('Company not found');
+            }
+
+            await docRef.update({
                 plan: 'pro',
-                isFree: false,
                 isProFree: true,
                 subscriptionStatus: 'special',
                 proFreeGrantedAt: admin.firestore.FieldValue.serverTimestamp(),
-                proFreeReason: reason,
+                proFreeGrantedBy: grantedBy,
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            console.log(`✅ [Subscription] Granted Pro-Free to company: ${companyId} (Reason: ${reason})`);
+            console.log(`[Subscription] Pro-Free granted to company ${companyId} by ${grantedBy}`);
 
             return {
                 success: true,
-                message: 'Pro-Free access granted successfully'
+                message: 'Pro-Free status granted successfully'
             };
         } catch (error) {
             console.error('[Subscription] Error granting Pro-Free:', error);
@@ -110,12 +118,13 @@ class SubscriptionService {
     }
 
     /**
-     * Revoke Pro-Free status (downgrade to free plan)
-     * 🔐 ADMIN ONLY
+     * Revoke Pro-Free status
+     * 🔐 ADMIN ONLY - Returns company to free plan
      */
     async revokeProFree(companyId) {
         try {
-            const doc = await this.db.collection('companies').doc(companyId).get();
+            const docRef = this.db.collection('companies').doc(companyId);
+            const doc = await docRef.get();
 
             if (!doc.exists) {
                 throw new Error('Company not found');
@@ -126,24 +135,24 @@ class SubscriptionService {
             if (!data.isProFree) {
                 return {
                     success: false,
-                    message: 'Company is not a Pro-Free account'
+                    message: 'Company does not have Pro-Free status'
                 };
             }
 
-            await this.db.collection('companies').doc(companyId).update({
+            await docRef.update({
                 plan: 'free',
-                isFree: true,
                 isProFree: false,
+                isFree: true,
                 subscriptionStatus: 'none',
                 proFreeRevokedAt: admin.firestore.FieldValue.serverTimestamp(),
                 updatedAt: admin.firestore.FieldValue.serverTimestamp()
             });
 
-            console.log(`⚠️ [Subscription] Revoked Pro-Free from company: ${companyId}`);
+            console.log(`[Subscription] Pro-Free revoked from company ${companyId}`);
 
             return {
                 success: true,
-                message: 'Pro-Free access revoked successfully'
+                message: 'Pro-Free status revoked'
             };
         } catch (error) {
             console.error('[Subscription] Error revoking Pro-Free:', error);
@@ -152,158 +161,110 @@ class SubscriptionService {
     }
 
     /**
-     * Upgrade company to paid Pro plan (via Stripe)
-     */
-    async upgradeToPro(companyId, stripeCustomerId, stripeSubscriptionId) {
-        try {
-            const doc = await this.db.collection('companies').doc(companyId).get();
-
-            if (!doc.exists) {
-                throw new Error('Company not found');
-            }
-
-            const data = doc.data();
-
-            // Don't allow upgrading Pro-Free accounts to paid
-            if (data.isProFree === true) {
-                return {
-                    success: false,
-                    message: 'Pro-Free accounts cannot be upgraded to paid plans'
-                };
-            }
-
-            await this.db.collection('companies').doc(companyId).update({
-                plan: 'pro',
-                isFree: false,
-                isProFree: false,
-                subscriptionStatus: 'active',
-                stripeCustomerId,
-                stripeSubscriptionId,
-                upgradedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            console.log(`✅ [Subscription] Upgraded company to Pro: ${companyId}`);
-
-            return {
-                success: true,
-                message: 'Successfully upgraded to Pro plan'
-            };
-        } catch (error) {
-            console.error('[Subscription] Error upgrading to Pro:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Downgrade company to free plan (subscription canceled/expired)
-     * Pro-Free accounts are protected from downgrade
-     */
-    async downgradeToFree(companyId) {
-        try {
-            const doc = await this.db.collection('companies').doc(companyId).get();
-
-            if (!doc.exists) {
-                throw new Error('Company not found');
-            }
-
-            const data = doc.data();
-
-            // 🔐 CRITICAL: Protect Pro-Free accounts from downgrade
-            if (data.isProFree === true) {
-                console.log(`⚠️ [Subscription] Cannot downgrade Pro-Free account: ${companyId}`);
-                return {
-                    success: false,
-                    message: 'Pro-Free accounts cannot be downgraded'
-                };
-            }
-
-            await this.db.collection('companies').doc(companyId).update({
-                plan: 'free',
-                isFree: true,
-                subscriptionStatus: 'canceled',
-                downgradedAt: admin.firestore.FieldValue.serverTimestamp(),
-                updatedAt: admin.firestore.FieldValue.serverTimestamp()
-            });
-
-            console.log(`⚠️ [Subscription] Downgraded company to Free: ${companyId}`);
-
-            return {
-                success: true,
-                message: 'Downgraded to Free plan'
-            };
-        } catch (error) {
-            console.error('[Subscription] Error downgrading to Free:', error);
-            throw error;
-        }
-    }
-
-    /**
-     * Check if company can access a specific feature
+     * Check feature access
      */
     async checkFeatureAccess(companyId, feature) {
-        const hasProAccess = await this.hasProAccess(companyId);
+        const hasAccess = await this.hasProAccess(companyId);
 
-        // Define pro-only features
+        // Define which features require Pro
         const proFeatures = [
             'unlimited_inboxes',
             'ai_automation',
             'cloud_storage',
             'whatsapp_integration',
-            'slack_integration',
             'priority_support',
-            'advanced_analytics',
-            'custom_branding'
+            'advanced_analytics'
         ];
 
-        // If feature is pro-only, check pro access
         if (proFeatures.includes(feature)) {
-            return hasProAccess;
+            return hasAccess;
         }
 
-        // Free features available to all
+        // All other features available to everyone
         return true;
     }
 
     /**
-     * Get inbox limit based on plan
+     * Get inbox limit for company
      */
     async getInboxLimit(companyId) {
-        const hasProAccess = await this.hasProAccess(companyId);
-        return hasProAccess ? -1 : 1; // -1 means unlimited, 1 means one inbox
+        const hasAccess = await this.hasProAccess(companyId);
+        return hasAccess ? -1 : 1; // -1 = unlimited
     }
 
     /**
-     * Check if company can create another inbox
+     * Check if company can create more inboxes
      */
-    async canCreateInbox(companyId) {
+    async canCreateInbox(companyId, currentInboxCount) {
+        const limit = await this.getInboxLimit(companyId);
+
+        if (limit === -1) return true; // Unlimited
+        return currentInboxCount < limit;
+    }
+
+    /**
+     * List all Pro-Free companies (admin tool)
+     */
+    async listProFreeCompanies() {
         try {
-            const limit = await this.getInboxLimit(companyId);
-
-            // Unlimited for pro users
-            if (limit === -1) {
-                return { canCreate: true, reason: 'unlimited' };
-            }
-
-            // Check current inbox count
-            const inboxes = await this.db.collection('customInboxes')
-                .where('companyId', '==', companyId)
+            const snapshot = await this.db.collection('companies')
+                .where('isProFree', '==', true)
                 .get();
 
-            const currentCount = inboxes.size;
+            return snapshot.docs.map(doc => ({
+                id: doc.id,
+                name: doc.data().name,
+                grantedAt: doc.data().proFreeGrantedAt,
+                grantedBy: doc.data().proFreeGrantedBy
+            }));
+        } catch (error) {
+            console.error('[Subscription] Error listing Pro-Free companies:', error);
+            throw error;
+        }
+    }
 
-            if (currentCount >= limit) {
-                return {
-                    canCreate: false,
-                    reason: 'limit_reached',
-                    message: 'Free plan limited to 1 inbox. Upgrade to Pro for unlimited inboxes.'
-                };
+    /**
+     * Update subscription from Stripe webhook
+     */
+    async updateFromStripe(companyId, stripeData) {
+        try {
+            const docRef = this.db.collection('companies').doc(companyId);
+            const doc = await docRef.get();
+
+            if (!doc.exists) {
+                throw new Error('Company not found');
             }
 
-            return { canCreate: true, reason: 'within_limit' };
+            // Don't override Pro-Free accounts
+            if (doc.data().isProFree) {
+                console.log(`[Subscription] Skipping Stripe update for Pro-Free company ${companyId}`);
+                return { success: true, message: 'Pro-Free account unchanged' };
+            }
+
+            const updateData = {
+                stripeCustomerId: stripeData.customerId,
+                stripeSubscriptionId: stripeData.subscriptionId,
+                subscriptionStatus: stripeData.status,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            // Update plan based on subscription status
+            if (stripeData.status === 'active') {
+                updateData.plan = 'pro';
+                updateData.isFree = false;
+            } else if (['canceled', 'unpaid', 'past_due'].includes(stripeData.status)) {
+                updateData.plan = 'free';
+                updateData.isFree = true;
+            }
+
+            await docRef.update(updateData);
+
+            console.log(`[Subscription] Updated company ${companyId} from Stripe: ${stripeData.status}`);
+
+            return { success: true };
         } catch (error) {
-            console.error('[Subscription] Error checking inbox creation:', error);
-            return { canCreate: false, reason: 'error' };
+            console.error('[Subscription] Error updating from Stripe:', error);
+            throw error;
         }
     }
 }

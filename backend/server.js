@@ -63,7 +63,7 @@ db = admin.firestore();
 // Set Firestore settings to avoid gRPC issues
 db.settings({
     ignoreUndefinedProperties: true,
-    databaseId: 'default'
+    databaseId: 'urbox-database'
 });
 
 // Function to verify Firestore connection

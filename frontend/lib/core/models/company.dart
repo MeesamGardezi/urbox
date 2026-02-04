@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 /// Company Model
 ///
 /// Represents a company/organization with subscription information
@@ -50,39 +48,6 @@ class Company {
   bool get hasCloudStorage => hasProAccess;
   bool get hasWhatsAppIntegration => hasProAccess;
   bool get hasPrioritySupport => hasProAccess;
-
-  factory Company.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-
-    return Company(
-      id: doc.id,
-      name: data['name'] ?? '',
-      ownerId: data['ownerId'] ?? '',
-      plan: data['plan'] ?? 'free',
-      isFree: data['isFree'] ?? true,
-      isProFree: data['isProFree'] ?? false,
-      subscriptionStatus: data['subscriptionStatus'] ?? 'none',
-      stripeCustomerId: data['stripeCustomerId'],
-      stripeSubscriptionId: data['stripeSubscriptionId'],
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'name': name,
-      'ownerId': ownerId,
-      'plan': plan,
-      'isFree': isFree,
-      'isProFree': isProFree,
-      'subscriptionStatus': subscriptionStatus,
-      'stripeCustomerId': stripeCustomerId,
-      'stripeSubscriptionId': stripeSubscriptionId,
-      'createdAt': Timestamp.fromDate(createdAt),
-      'updatedAt': Timestamp.fromDate(updatedAt),
-    };
-  }
 
   Company copyWith({
     String? id,

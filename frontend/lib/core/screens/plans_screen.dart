@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../auth/services/auth_service.dart';
+import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../models/company.dart';
 import '../services/payment_service.dart';
@@ -30,23 +31,32 @@ class _PlansScreenState extends State<PlansScreen> {
     if (user == null) return;
 
     try {
-      // Get user's company ID
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
+      // Get user's profile to find company ID
+      final userResponse = await AuthService.getUserProfile(user!.uid);
 
-      if (userDoc.exists) {
-        _companyId = userDoc.data()?['companyId'];
+      if (userResponse['success'] == true) {
+        final userData = userResponse['user'] as Map<String, dynamic>;
+        _companyId = userData['companyId'];
 
         if (_companyId != null) {
-          final companyDoc = await FirebaseFirestore.instance
-              .collection('companies')
-              .doc(_companyId)
-              .get();
+          final companyResponse = await SubscriptionService.getCompanyPlan(
+            _companyId!,
+          );
 
-          if (companyDoc.exists) {
-            _company = Company.fromFirestore(companyDoc);
+          if (companyResponse['success'] == true) {
+            _company = Company(
+              id: _companyId!,
+              name:
+                  companyResponse['companyName']?.toString() ?? 'Your Company',
+              ownerId: '', // Not needed for display here
+              plan: companyResponse['plan']?.toString() ?? 'free',
+              isFree: companyResponse['isFree'] == true,
+              isProFree: companyResponse['isProFree'] == true,
+              subscriptionStatus:
+                  companyResponse['subscriptionStatus']?.toString() ?? 'none',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
           }
         }
       }

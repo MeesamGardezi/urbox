@@ -1,80 +1,109 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../../core/config/app_config.dart';
+import '../config/app_config.dart';
 
-/// Payment API Service
+/// Subscription API Service
 ///
-/// Handles Stripe payment and subscription management
-class PaymentService {
-  static const String _baseUrl = '${AppConfig.paymentEndpoint}';
+/// Handles subscription and plan-related API calls
+class SubscriptionService {
+  static const String _baseUrl = AppConfig.subscriptionEndpoint;
 
-  /// Create Stripe checkout session for Pro subscription
-  /// Returns checkout URL
-  static Future<String?> createCheckoutSession({
-    required String companyId,
-    String? successUrl,
-    String? cancelUrl,
-  }) async {
+  /// Get company plan details
+  /// Returns: {success, plan, isFree, isProFree, subscriptionStatus, hasProAccess, canUpgrade, companyName}
+  static Future<Map<String, dynamic>> getCompanyPlan(String companyId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/create-checkout-session'),
+      final response = await http.get(
+        Uri.parse('$_baseUrl/plan?companyId=$companyId'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'companyId': companyId,
-          'successUrl': successUrl,
-          'cancelUrl': cancelUrl,
-        }),
       );
 
       final data = json.decode(response.body);
 
-      if (response.statusCode == 200 && data['url'] != null) {
-        return data['url'];
+      if (response.statusCode == 200) {
+        return {'success': true, ...data};
+      } else {
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to get plan details',
+        };
       }
-
-      return null;
     } catch (e) {
-      print('[Payment] Checkout error: $e');
-      return null;
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
-  /// Create Stripe customer portal session
-  /// Returns portal URL
-  static Future<String?> createPortalSession({
-    required String companyId,
-    String? returnUrl,
-  }) async {
+  /// Check if company has Pro access
+  /// Returns: {success, hasProAccess, plan, isProFree, subscriptionStatus}
+  static Future<Map<String, dynamic>> checkAccess(String companyId) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/create-portal-session'),
+      final response = await http.get(
+        Uri.parse('$_baseUrl/check-access?companyId=$companyId'),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'companyId': companyId, 'returnUrl': returnUrl}),
       );
 
       final data = json.decode(response.body);
 
-      if (response.statusCode == 200 && data['url'] != null) {
-        return data['url'];
+      if (response.statusCode == 200) {
+        return {'success': true, ...data};
+      } else {
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to check access',
+        };
       }
-
-      return null;
     } catch (e) {
-      print('[Payment] Portal error: $e');
-      return null;
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
 
-  /// Manually sync subscription status (useful for dev/testing)
-  static Future<Map<String, dynamic>> syncSubscription(String companyId) async {
+  /// Check if company can access a specific feature
+  /// Returns: {success, feature, hasAccess}
+  static Future<Map<String, dynamic>> checkFeatureAccess(
+    String companyId,
+    String feature,
+  ) async {
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/sync-subscription'),
+      final response = await http.get(
+        Uri.parse(
+          '$_baseUrl/feature-access?companyId=$companyId&feature=$feature',
+        ),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'companyId': companyId}),
       );
 
-      return json.decode(response.body);
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, ...data};
+      } else {
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to check feature access',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Get inbox limit for company
+  /// Returns: {success, limit, canCreateMore, currentCount}
+  static Future<Map<String, dynamic>> getInboxLimit(String companyId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/inbox-limit?companyId=$companyId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      final data = json.decode(response.body);
+
+      if (response.statusCode == 200) {
+        return {'success': true, ...data};
+      } else {
+        return {
+          'success': false,
+          'error': data['error'] ?? 'Failed to get inbox limit',
+        };
+      }
     } catch (e) {
       return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }

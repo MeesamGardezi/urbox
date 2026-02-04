@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
 import 'firebase_options.dart';
 import 'core/routing/app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -13,24 +11,6 @@ void main() async {
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  // Configure Firestore for Web
-  if (kIsWeb) {
-    try {
-      // Create a specific database instance if needed, or use default
-      // Use defaults but disable persistence to avoid cache synchronization issues
-      // which can cause "client offline" errors behind proxies/firewalls
-      FirebaseFirestore.instance.settings = const Settings(
-        persistenceEnabled: false,
-      );
-
-      // Explicitly enable network to ensure connection
-      await FirebaseFirestore.instance.enableNetwork();
-      debugPrint("Firestore configured for Web");
-    } catch (e) {
-      debugPrint("Error configuring Firestore: $e");
-    }
-  }
 
   runApp(const MyApp());
 }

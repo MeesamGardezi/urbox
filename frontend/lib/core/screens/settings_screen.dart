@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../auth/services/auth_service.dart';
+import '../services/subscription_service.dart';
 import '../theme/app_theme.dart';
 import '../models/user_profile.dart';
 import '../models/company.dart';
@@ -25,25 +26,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _loadData();
   }
 
+  /// Helper to parse DateTime from various formats
+  DateTime _parseDateTime(dynamic value) {
+    if (value == null) return DateTime.now();
+    if (value is DateTime) return value;
+    if (value is String) {
+      return DateTime.tryParse(value) ?? DateTime.now();
+    }
+    if (value is Map) {
+      final seconds = value['_seconds'] ?? value['seconds'] ?? 0;
+      final nanoseconds = value['_nanoseconds'] ?? value['nanoseconds'] ?? 0;
+      return DateTime.fromMillisecondsSinceEpoch(
+        (seconds * 1000) + (nanoseconds ~/ 1000000),
+      );
+    }
+    return DateTime.now();
+  }
+
   Future<void> _loadData() async {
     if (user == null) return;
 
     try {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user!.uid)
-          .get();
+      final userResponse = await AuthService.getUserProfile(user!.uid);
 
-      if (userDoc.exists) {
-        _userProfile = UserProfile.fromFirestore(userDoc);
+      if (userResponse['success'] == true) {
+        final userData = userResponse['user'] as Map<String, dynamic>;
 
-        final companyDoc = await FirebaseFirestore.instance
-            .collection('companies')
-            .doc(_userProfile!.companyId)
-            .get();
+        _userProfile = UserProfile(
+          id: userData['id']?.toString() ?? user!.uid,
+          email: userData['email']?.toString() ?? '',
+          displayName: userData['displayName']?.toString() ?? '',
+          companyId: userData['companyId']?.toString() ?? '',
+          role: userData['role']?.toString() ?? 'member',
+          assignedInboxIds: List<String>.from(
+            userData['assignedInboxIds'] ?? [],
+          ),
+          status: userData['status']?.toString() ?? 'active',
+          createdAt: _parseDateTime(userData['createdAt']),
+          updatedAt: _parseDateTime(userData['updatedAt']),
+          mfaEnabled: userData['mfaEnabled'] == true,
+          phoneNumber: userData['phoneNumber']?.toString(),
+          timezone: userData['timezone']?.toString(),
+          language: userData['language']?.toString(),
+        );
 
-        if (companyDoc.exists) {
-          _company = Company.fromFirestore(companyDoc);
+        if (_userProfile!.companyId.isNotEmpty) {
+          final companyResponse = await SubscriptionService.getCompanyPlan(
+            _userProfile!.companyId,
+          );
+
+          if (companyResponse['success'] == true) {
+            _company = Company(
+              id: _userProfile!.companyId,
+              name:
+                  companyResponse['companyName']?.toString() ?? 'Your Company',
+              ownerId: '',
+              plan: companyResponse['plan']?.toString() ?? 'free',
+              isFree: companyResponse['isFree'] == true,
+              isProFree: companyResponse['isProFree'] == true,
+              subscriptionStatus:
+                  companyResponse['subscriptionStatus']?.toString() ?? 'none',
+              createdAt: DateTime.now(),
+              updatedAt: DateTime.now(),
+            );
+          }
         }
       }
 
