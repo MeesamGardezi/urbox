@@ -247,6 +247,112 @@ function createAuthRoutes(db) {
         }
     });
 
+    router.post('/update-preferences', async (req, res) => {
+        const { userId, preferences, emailNotifications, pushNotifications } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'User ID is required'
+            });
+        }
+
+        try {
+            const updateData = {
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            };
+
+            if (preferences) updateData.preferences = preferences;
+            if (typeof emailNotifications === 'boolean') updateData.emailNotifications = emailNotifications;
+            if (typeof pushNotifications === 'boolean') updateData.pushNotifications = pushNotifications;
+
+            await db.collection('users').doc(userId).update(updateData);
+
+            res.json({
+                success: true,
+                message: 'Preferences updated'
+            });
+
+        } catch (error) {
+            console.error('[Auth] Update preferences error:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to update preferences'
+            });
+        }
+    });
+
+    router.post('/delete-account', async (req, res) => {
+        const { userId } = req.body;
+
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                error: 'User ID is required'
+            });
+        }
+
+        try {
+            // Delete from Authentication
+            await admin.auth().deleteUser(userId);
+
+            // Delete from Firestore
+            await db.collection('users').doc(userId).delete();
+
+            // Note: We are keeping the company even if the owner deletes their account
+            // to prevent data loss for other members. A better approach might be
+            // to transfer ownership or archive the company.
+
+            res.json({
+                success: true,
+                message: 'Account deleted successfully'
+            });
+
+        } catch (error) {
+            console.error('[Auth] Delete account error:', error);
+            res.status(500).json({
+                success: false,
+                error: 'Failed to delete account'
+            });
+        }
+    });
+
+    router.post('/change-password', async (req, res) => {
+        const { userId, newPassword } = req.body;
+
+        if (!userId || !newPassword) {
+            return res.status(400).json({
+                success: false,
+                error: 'User ID and new password are required'
+            });
+        }
+
+        if (newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                error: 'Password must be at least 6 characters'
+            });
+        }
+
+        try {
+            await admin.auth().updateUser(userId, {
+                password: newPassword
+            });
+
+            res.json({
+                success: true,
+                message: 'Password updated successfully'
+            });
+
+        } catch (error) {
+            console.error('[Auth] Change password error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message || 'Failed to update password'
+            });
+        }
+    });
+
     router.get('/test', async (req, res) => {
         try {
             const allDocs = await db.collection('pendingInvites').get();
@@ -294,7 +400,10 @@ function createAuthRoutes(db) {
                     timezone: userData.timezone,
                     language: userData.language,
                     createdAt: userData.createdAt,
-                    lastLoginAt: userData.lastLoginAt
+                    lastLoginAt: userData.lastLoginAt,
+                    emailNotifications: userData.emailNotifications,
+                    pushNotifications: userData.pushNotifications,
+                    preferences: userData.preferences
                 }
             });
 

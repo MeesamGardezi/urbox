@@ -6,9 +6,17 @@ import '../models/company.dart';
 import '../models/user_profile.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/subscription_service.dart';
+import 'plans_screen.dart';
+import 'settings_screen.dart';
 
+/// URBox Dashboard - Main App Shell
+///
+/// This screen IS the app shell with persistent sidebar.
+/// It renders different content in the main area based on the current route.
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final Widget? child; // Optional child for nested routes
+
+  const DashboardScreen({super.key, this.child});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
@@ -20,6 +28,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Company? _company;
   bool _isLoading = true;
   String? _loadError;
+  bool _isSidebarCollapsed = false;
+  String? _companyId;
+  String? _userName;
 
   @override
   void initState() {
@@ -27,17 +38,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadData();
   }
 
-  /// Helper to parse DateTime from various formats (Firestore Timestamp, ISO string, or Map)
   DateTime _parseDateTime(dynamic value) {
     if (value == null) return DateTime.now();
-
     if (value is DateTime) return value;
-
     if (value is String) {
       return DateTime.tryParse(value) ?? DateTime.now();
     }
-
-    // Handle Firestore Timestamp returned as Map: {_seconds: xxx, _nanoseconds: xxx}
     if (value is Map) {
       final seconds = value['_seconds'] ?? value['seconds'] ?? 0;
       final nanoseconds = value['_nanoseconds'] ?? value['nanoseconds'] ?? 0;
@@ -45,22 +51,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
         (seconds * 1000) + (nanoseconds ~/ 1000000),
       );
     }
-
     return DateTime.now();
   }
 
   Future<void> _loadData() async {
     if (user == null) {
-      if (mounted) {
-        context.go('/auth');
-      }
+      if (mounted) context.go('/auth');
       return;
     }
 
     try {
-      debugPrint('Loading user profile for ${user!.uid} via API...');
+      debugPrint('Loading user profile for ${user!.uid}...');
 
-      // Fetch user profile through backend API
       final userResponse = await AuthService.getUserProfile(user!.uid);
 
       if (userResponse['success'] != true) {
@@ -68,9 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
 
       final userData = userResponse['user'] as Map<String, dynamic>;
-      debugPrint('User profile loaded: ${userData['displayName']}');
 
-      // Create UserProfile from API response with proper type handling
       _userProfile = UserProfile(
         id: userData['id']?.toString() ?? user!.uid,
         email: userData['email']?.toString() ?? '',
@@ -79,40 +79,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
         role: userData['role']?.toString() ?? 'member',
         assignedInboxIds: List<String>.from(userData['assignedInboxIds'] ?? []),
         status: userData['status']?.toString() ?? 'active',
-        createdAt: _parseDateTime(userData['createdAt']),
-        updatedAt: _parseDateTime(userData['updatedAt']),
         mfaEnabled: userData['mfaEnabled'] == true,
         phoneNumber: userData['phoneNumber']?.toString(),
         timezone: userData['timezone']?.toString(),
         language: userData['language']?.toString(),
+        createdAt: _parseDateTime(userData['createdAt']),
+        lastLoginAt: _parseDateTime(userData['lastLoginAt']),
+        updatedAt: _parseDateTime(userData['updatedAt']),
       );
 
-      // Fetch company/subscription data through backend API
-      if (_userProfile!.companyId.isNotEmpty) {
-        debugPrint('Loading company ${_userProfile!.companyId} via API...');
+      _companyId = _userProfile!.companyId;
+      _userName = _userProfile!.displayName.isNotEmpty
+          ? _userProfile!.displayName
+          : user!.email?.split('@').first;
 
+      // Fetch company data
+      if (_userProfile!.companyId.isNotEmpty) {
         final companyResponse = await SubscriptionService.getCompanyPlan(
           _userProfile!.companyId,
         );
 
-        if (companyResponse['success'] == true) {
-          debugPrint('Company data loaded');
+        if (companyResponse['success'] == true &&
+            companyResponse['company'] != null) {
+          final companyData =
+              companyResponse['company'] as Map<String, dynamic>;
 
-          // Create Company from API response
           _company = Company(
             id: _userProfile!.companyId,
-            name: companyResponse['companyName']?.toString() ?? 'Your Company',
+            name: companyData['companyName']?.toString() ?? 'Your Company',
             ownerId: '',
-            plan: companyResponse['plan']?.toString() ?? 'free',
-            isFree: companyResponse['isFree'] == true,
-            isProFree: companyResponse['isProFree'] == true,
+            plan: companyData['plan']?.toString() ?? 'free',
+            isFree: companyData['isFree'] == true,
+            isProFree: companyData['isProFree'] == true,
             subscriptionStatus:
-                companyResponse['subscriptionStatus']?.toString() ?? 'none',
+                companyData['subscriptionStatus']?.toString() ?? 'none',
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
-        } else {
-          debugPrint('Company not found - continuing without company data');
         }
       }
 
@@ -140,30 +143,382 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _loadData();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Dashboard', style: AppTheme.headingMd),
+  void _handleLogout() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
         actions: [
-          if (_company != null && _company!.canUpgrade)
-            TextButton.icon(
-              onPressed: () => context.push('/plans'),
-              icon: const Icon(Icons.upgrade, size: 18),
-              label: const Text('Upgrade to Pro'),
-              style: TextButton.styleFrom(foregroundColor: AppTheme.primary),
-            ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: () => context.push('/settings'),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              FirebaseAuth.instance.signOut();
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.error),
+            child: const Text('Logout'),
           ),
         ],
       ),
-      body: _buildBody(),
     );
   }
 
-  Widget _buildBody() {
+  @override
+  Widget build(BuildContext context) {
+    final currentLocation = GoRouterState.of(context).matchedLocation;
+    final sidebarWidth = _isSidebarCollapsed ? 72.0 : 260.0;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: Row(
+        children: [
+          // Sidebar
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            width: sidebarWidth,
+            child: _buildSidebar(currentLocation),
+          ),
+
+          // Divider
+          Container(width: 1, color: AppTheme.border),
+
+          // Main Content Area
+          Expanded(child: widget.child ?? _buildDefaultDashboardContent()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebar(String currentLocation) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Column(
+        children: [
+          _buildSidebarHeader(),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(
+                vertical: AppTheme.spacing4,
+                horizontal: AppTheme.spacing3,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!_isSidebarCollapsed) _buildSectionHeader('MAIN'),
+                  if (!_isSidebarCollapsed)
+                    const SizedBox(height: AppTheme.spacing2),
+                  _buildNavItem(
+                    icon: Icons.dashboard_outlined,
+                    activeIcon: Icons.dashboard,
+                    label: 'Dashboard',
+                    route: '/dashboard',
+                    isSelected: currentLocation == '/dashboard',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.inbox_outlined,
+                    activeIcon: Icons.inbox,
+                    label: 'Inbox',
+                    route: '/inbox',
+                    isSelected: currentLocation.startsWith('/inbox'),
+                  ),
+                  _buildNavItem(
+                    icon: Icons.send_outlined,
+                    activeIcon: Icons.send,
+                    label: 'Sent',
+                    route: '/sent',
+                    isSelected: currentLocation == '/sent',
+                  ),
+
+                  const SizedBox(height: AppTheme.spacing6),
+
+                  if (!_isSidebarCollapsed) _buildSectionHeader('SETTINGS'),
+                  if (!_isSidebarCollapsed)
+                    const SizedBox(height: AppTheme.spacing2),
+                  _buildNavItem(
+                    icon: Icons.email_outlined,
+                    activeIcon: Icons.email,
+                    label: 'Email Accounts',
+                    route: '/accounts',
+                    isSelected: currentLocation == '/accounts',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.folder_outlined,
+                    activeIcon: Icons.folder,
+                    label: 'Manage Inboxes',
+                    route: '/custom-inboxes',
+                    isSelected: currentLocation == '/custom-inboxes',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.credit_card_outlined,
+                    activeIcon: Icons.credit_card,
+                    label: 'Plans & Billing',
+                    route: '/plans',
+                    isSelected: currentLocation == '/plans',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.settings_outlined,
+                    activeIcon: Icons.settings,
+                    label: 'Settings',
+                    route: '/settings',
+                    isSelected: currentLocation == '/settings',
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _buildUserSection(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebarHeader() {
+    return Container(
+      height: 64,
+      padding: EdgeInsets.symmetric(
+        horizontal: _isSidebarCollapsed ? AppTheme.spacing3 : AppTheme.spacing4,
+      ),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.border)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppTheme.primary,
+              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+            ),
+            child: const Icon(
+              Icons.all_inbox_rounded,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+
+          if (!_isSidebarCollapsed) ...[
+            const SizedBox(width: AppTheme.spacing3),
+            Expanded(
+              child: Text(
+                'URBox',
+                style: AppTheme.headingSm.copyWith(
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.3,
+                ),
+              ),
+            ),
+          ],
+
+          IconButton(
+            onPressed: () =>
+                setState(() => _isSidebarCollapsed = !_isSidebarCollapsed),
+            icon: Icon(
+              _isSidebarCollapsed ? Icons.chevron_right : Icons.chevron_left,
+              color: AppTheme.textMuted,
+              size: 20,
+            ),
+            tooltip: _isSidebarCollapsed
+                ? 'Expand sidebar'
+                : 'Collapse sidebar',
+            splashRadius: 18,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionHeader(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(
+        left: AppTheme.spacing2,
+        bottom: AppTheme.spacing1,
+      ),
+      child: Text(
+        label,
+        style: AppTheme.labelSm.copyWith(
+          color: AppTheme.textMuted,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required IconData icon,
+    required IconData activeIcon,
+    required String label,
+    required String route,
+    bool isSelected = false,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+        child: InkWell(
+          onTap: () => context.go(route),
+          borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+          hoverColor: AppTheme.gray100,
+          splashColor: AppTheme.primary.withOpacity(0.08),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: EdgeInsets.symmetric(
+              horizontal: _isSidebarCollapsed
+                  ? AppTheme.spacing3
+                  : AppTheme.spacing3,
+              vertical: AppTheme.spacing3,
+            ),
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.primary.withOpacity(0.08) : null,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  isSelected ? activeIcon : icon,
+                  color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                  size: 20,
+                ),
+                if (!_isSidebarCollapsed) ...[
+                  const SizedBox(width: AppTheme.spacing3),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: AppTheme.bodyMd.copyWith(
+                        color: isSelected
+                            ? AppTheme.primary
+                            : Theme.of(context).textTheme.bodyMedium?.color,
+                        fontWeight: isSelected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildUserSection() {
+    return Container(
+      padding: EdgeInsets.all(
+        _isSidebarCollapsed ? AppTheme.spacing3 : AppTheme.spacing4,
+      ),
+      decoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppTheme.border)),
+      ),
+      child: Column(
+        children: [
+          if (!_isSidebarCollapsed)
+            Container(
+              padding: const EdgeInsets.all(AppTheme.spacing3),
+              margin: const EdgeInsets.only(bottom: AppTheme.spacing3),
+              decoration: BoxDecoration(
+                color: AppTheme.gray50,
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary,
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                    ),
+                    child: Center(
+                      child: Text(
+                        (_userName ?? 'U').substring(0, 1).toUpperCase(),
+                        style: AppTheme.labelLg.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppTheme.spacing3),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _userName ?? 'User',
+                          style: AppTheme.labelMd.copyWith(
+                            color: Theme.of(
+                              context,
+                            ).textTheme.titleSmall?.color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          user?.email ?? '',
+                          style: AppTheme.labelSm.copyWith(
+                            color: Theme.of(context).textTheme.bodySmall?.color,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+            child: InkWell(
+              onTap: _handleLogout,
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  vertical: AppTheme.spacing3,
+                  horizontal: _isSidebarCollapsed
+                      ? AppTheme.spacing3
+                      : AppTheme.spacing2 + 4,
+                ),
+                child: Row(
+                  mainAxisAlignment: _isSidebarCollapsed
+                      ? MainAxisAlignment.center
+                      : MainAxisAlignment.start,
+                  children: [
+                    Icon(Icons.logout_rounded, color: AppTheme.error, size: 20),
+                    if (!_isSidebarCollapsed) ...[
+                      const SizedBox(width: AppTheme.spacing3),
+                      Text(
+                        'Sign out',
+                        style: AppTheme.bodyMd.copyWith(
+                          color: AppTheme.error,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Default dashboard content when on /dashboard route
+  Widget _buildDefaultDashboardContent() {
     if (_isLoading) {
       return const Center(
         child: Column(
@@ -193,8 +548,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                _loadError ?? 'Failed to load user data',
-                style: AppTheme.bodySm.copyWith(color: AppTheme.textMuted),
+                _loadError ?? 'Please check your internet connection',
+                style: AppTheme.bodyMd.copyWith(color: AppTheme.textMuted),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
@@ -203,16 +558,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 icon: const Icon(Icons.refresh),
                 label: const Text('Retry'),
               ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () async {
-                  await FirebaseAuth.instance.signOut();
-                  if (mounted) {
-                    context.go('/auth');
-                  }
-                },
-                child: const Text('Sign out and try again'),
-              ),
             ],
           ),
         ),
@@ -220,19 +565,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacing6),
+      padding: const EdgeInsets.all(AppTheme.spacing8),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1200),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildWelcomeSection(),
-              const SizedBox(height: AppTheme.spacing8),
+              _buildWelcomeHeader(),
+              const SizedBox(height: AppTheme.spacing6),
               if (_company != null) _buildPlanStatusCard(),
               const SizedBox(height: AppTheme.spacing6),
               _buildQuickStats(),
-              const SizedBox(height: AppTheme.spacing8),
+              const SizedBox(height: AppTheme.spacing6),
               _buildGettingStarted(),
             ],
           ),
@@ -241,24 +586,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildWelcomeSection() {
+  Widget _buildWelcomeHeader() {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppTheme.spacing6),
         child: Row(
           children: [
             Container(
-              width: 64,
-              height: 64,
+              width: 56,
+              height: 56,
               decoration: BoxDecoration(
                 gradient: AppTheme.primaryGradient,
                 borderRadius: BorderRadius.circular(AppTheme.radiusLg),
               ),
-              child: Center(
-                child: Text(
-                  (_userProfile?.displayName ?? 'U')[0].toUpperCase(),
-                  style: AppTheme.headingLg.copyWith(color: Colors.white),
-                ),
+              child: const Icon(
+                Icons.waving_hand,
+                color: Colors.white,
+                size: 28,
               ),
             ),
             const SizedBox(width: AppTheme.spacing4),
@@ -334,7 +678,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 if (!hasPro)
                   ElevatedButton(
-                    onPressed: () => context.push('/plans'),
+                    onPressed: () => context.go('/plans'),
                     child: const Text('Upgrade'),
                   ),
               ],
@@ -439,6 +783,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'Connect your first email account',
               description: 'Add Gmail, Outlook, or any IMAP account',
               completed: false,
+              onTap: () => context.go('/accounts'),
             ),
             const Divider(height: AppTheme.spacing6),
             _buildGettingStartedItem(
@@ -446,6 +791,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'Invite team members',
               description: 'Collaborate with your team on shared inboxes',
               completed: false,
+              onTap: () => context.go('/settings'),
             ),
             const Divider(height: AppTheme.spacing6),
             _buildGettingStartedItem(
@@ -453,6 +799,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               title: 'Create a shared inbox',
               description: 'Organize your emails with custom inboxes',
               completed: false,
+              onTap: () => context.go('/custom-inboxes'),
             ),
           ],
         ),
@@ -465,44 +812,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String title,
     required String description,
     required bool completed,
+    VoidCallback? onTap,
   }) {
-    return Row(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: completed
-                ? AppTheme.success.withOpacity(0.1)
-                : AppTheme.primary.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-          ),
-          child: Icon(
-            completed ? Icons.check_circle : icon,
-            color: completed ? AppTheme.success : AppTheme.primary,
-            size: 20,
-          ),
-        ),
-        const SizedBox(width: AppTheme.spacing3),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: AppTheme.labelMd.copyWith(
-                  decoration: completed ? TextDecoration.lineThrough : null,
-                ),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: AppTheme.spacing2),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: completed
+                    ? AppTheme.success.withOpacity(0.1)
+                    : AppTheme.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(AppTheme.radiusMd),
               ),
-              const SizedBox(height: AppTheme.spacing1),
-              Text(
-                description,
-                style: AppTheme.bodySm.copyWith(color: AppTheme.textMuted),
+              child: Icon(
+                completed ? Icons.check_circle : icon,
+                color: completed ? AppTheme.success : AppTheme.primary,
+                size: 20,
               ),
-            ],
-          ),
+            ),
+            const SizedBox(width: AppTheme.spacing3),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: AppTheme.labelMd.copyWith(
+                      decoration: completed ? TextDecoration.lineThrough : null,
+                    ),
+                  ),
+                  const SizedBox(height: AppTheme.spacing1),
+                  Text(
+                    description,
+                    style: AppTheme.bodySm.copyWith(color: AppTheme.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: AppTheme.textMuted, size: 20),
+          ],
         ),
-      ],
+      ),
     );
   }
 }

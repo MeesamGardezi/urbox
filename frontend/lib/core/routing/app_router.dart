@@ -9,21 +9,25 @@ import '../screens/settings_screen.dart';
 
 /// App Router Configuration
 ///
-/// Handles all routing with authentication guards
+/// DashboardScreen IS the app shell with sidebar.
+/// All authenticated routes render inside it via ShellRoute.
 class AppRouter {
+  static final _rootNavigatorKey = GlobalKey<NavigatorState>();
+  static final _shellNavigatorKey = GlobalKey<NavigatorState>();
+
   static final GoRouter router = GoRouter(
+    navigatorKey: _rootNavigatorKey,
     initialLocation: '/auth',
+    debugLogDiagnostics: false,
     redirect: (context, state) {
       final user = FirebaseAuth.instance.currentUser;
       final isLoggedIn = user != null;
       final isOnAuthPage = state.matchedLocation.startsWith('/auth');
 
-      // Not logged in and not on auth page -> redirect to auth
       if (!isLoggedIn && !isOnAuthPage) {
         return '/auth';
       }
 
-      // Logged in and on auth page -> redirect to dashboard
       if (isLoggedIn && isOnAuthPage) {
         return '/dashboard';
       }
@@ -31,20 +35,17 @@ class AppRouter {
       return null;
     },
     routes: [
-      GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
-
-      // Unified Authentication Route
+      // Authentication Route (outside shell)
       GoRoute(
         path: '/auth',
         name: 'auth',
         builder: (context, state) {
-          // Check for invite token in query parameters
           final inviteToken = state.uri.queryParameters['invite'];
           return AuthScreen(inviteToken: inviteToken);
         },
       ),
 
-      // Legacy routes for backward compatibility (redirect to unified auth)
+      // Legacy routes
       GoRoute(path: '/login', redirect: (context, state) => '/auth'),
       GoRoute(path: '/signup', redirect: (context, state) => '/auth'),
       GoRoute(
@@ -55,48 +56,217 @@ class AppRouter {
         },
       ),
 
-      // App Routes (requires authentication)
-      GoRoute(
-        path: '/dashboard',
-        name: 'dashboard',
-        builder: (context, state) => const DashboardScreen(),
-      ),
+      // Shell Route - DashboardScreen wraps everything
+      ShellRoute(
+        navigatorKey: _shellNavigatorKey,
+        builder: (context, state, child) {
+          return DashboardScreen(child: child);
+        },
+        routes: [
+          GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
 
-      GoRoute(
-        path: '/plans',
-        name: 'plans',
-        builder: (context, state) => const PlansScreen(),
-      ),
+          // Dashboard home (shows default dashboard content)
+          GoRoute(
+            path: '/dashboard',
+            name: 'dashboard',
+            pageBuilder: (context, state) => const NoTransitionPage(
+              child: SizedBox.shrink(), // Dashboard renders its own content
+            ),
+          ),
 
-      GoRoute(
-        path: '/settings',
-        name: 'settings',
-        builder: (context, state) => const SettingsScreen(),
+          // Inbox
+          GoRoute(
+            path: '/inbox',
+            name: 'inbox',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.inbox_outlined,
+                        size: 64,
+                        color: Theme.of(
+                          context,
+                        ).iconTheme.color?.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Inbox',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Coming Soon',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Sent
+          GoRoute(
+            path: '/sent',
+            name: 'sent',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.send_outlined,
+                        size: 64,
+                        color: Theme.of(
+                          context,
+                        ).iconTheme.color?.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Sent',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Coming Soon',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Email Accounts
+          GoRoute(
+            path: '/accounts',
+            name: 'accounts',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.email_outlined,
+                        size: 64,
+                        color: Theme.of(
+                          context,
+                        ).iconTheme.color?.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Email Accounts',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Coming Soon',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Custom Inboxes
+          GoRoute(
+            path: '/custom-inboxes',
+            name: 'customInboxes',
+            pageBuilder: (context, state) => NoTransitionPage(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.folder_outlined,
+                        size: 64,
+                        color: Theme.of(
+                          context,
+                        ).iconTheme.color?.withOpacity(0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Custom Inboxes',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Coming Soon',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).textTheme.bodySmall?.color,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Plans & Billing
+          GoRoute(
+            path: '/plans',
+            name: 'plans',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: PlansScreen()),
+          ),
+
+          // Settings
+          GoRoute(
+            path: '/settings',
+            name: 'settings',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: SettingsScreen()),
+          ),
+        ],
       ),
     ],
-
-    errorBuilder: (context, state) => Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Page not found',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              state.uri.toString(),
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () => context.go('/dashboard'),
-              child: const Text('Go to Dashboard'),
-            ),
-          ],
+    errorPageBuilder: (context, state) => MaterialPage(
+      key: state.pageKey,
+      child: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 80, color: Colors.red),
+              const SizedBox(height: 16),
+              Text(
+                'Page Not Found',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                state.matchedLocation,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: Colors.grey),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () => context.go('/dashboard'),
+                child: const Text('Go Home'),
+              ),
+            ],
+          ),
         ),
       ),
     ),

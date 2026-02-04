@@ -20,6 +20,7 @@ class Company {
   // Metadata
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int memberCount;
 
   Company({
     required this.id,
@@ -33,6 +34,7 @@ class Company {
     this.stripeSubscriptionId,
     required this.createdAt,
     required this.updatedAt,
+    this.memberCount = 1,
   });
 
   // Computed properties
@@ -61,6 +63,7 @@ class Company {
     String? stripeSubscriptionId,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? memberCount,
   }) {
     return Company(
       id: id ?? this.id,
@@ -74,6 +77,7 @@ class Company {
       stripeSubscriptionId: stripeSubscriptionId ?? this.stripeSubscriptionId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      memberCount: memberCount ?? this.memberCount,
     );
   }
 }

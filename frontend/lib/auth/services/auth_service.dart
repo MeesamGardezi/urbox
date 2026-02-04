@@ -93,4 +93,62 @@ class AuthService {
       return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
+
+  /// Update user preferences
+  static Future<Map<String, dynamic>> updatePreferences({
+    required String userId,
+    Map<String, dynamic>? preferences,
+    bool? emailNotifications,
+    bool? pushNotifications,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/update-preferences'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'userId': userId,
+          'preferences': preferences,
+          'emailNotifications': emailNotifications,
+          'pushNotifications': pushNotifications,
+        }),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Delete account
+  static Future<Map<String, dynamic>> deleteAccount(String userId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/delete-account'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId}),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Change password
+  static Future<Map<String, dynamic>> changePassword({
+    required String userId,
+    required String newPassword,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/change-password'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'userId': userId, 'newPassword': newPassword}),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
 }

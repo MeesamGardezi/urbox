@@ -122,7 +122,6 @@ class AppTheme {
   static TextStyle get headingXl => GoogleFonts.inter(
     fontSize: 32,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
     height: 1.2,
     letterSpacing: -0.5,
   );
@@ -130,7 +129,6 @@ class AppTheme {
   static TextStyle get headingLg => GoogleFonts.inter(
     fontSize: 28,
     fontWeight: FontWeight.w700,
-    color: textPrimary,
     height: 1.2,
     letterSpacing: -0.3,
   );
@@ -138,68 +136,70 @@ class AppTheme {
   static TextStyle get headingMd => GoogleFonts.inter(
     fontSize: 24,
     fontWeight: FontWeight.w600,
-    color: textPrimary,
     height: 1.3,
     letterSpacing: -0.2,
   );
 
-  static TextStyle get headingSm => GoogleFonts.inter(
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    color: textPrimary,
-    height: 1.3,
-  );
+  static TextStyle get headingSm =>
+      GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w600, height: 1.3);
 
-  static TextStyle get bodyLg => GoogleFonts.inter(
-    fontSize: 18,
-    fontWeight: FontWeight.w400,
-    color: textPrimary,
-    height: 1.5,
-  );
+  static TextStyle get bodyLg =>
+      GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w400, height: 1.5);
 
-  static TextStyle get bodyMd => GoogleFonts.inter(
-    fontSize: 16,
-    fontWeight: FontWeight.w400,
-    color: textPrimary,
-    height: 1.5,
-  );
+  static TextStyle get bodyMd =>
+      GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, height: 1.5);
 
-  static TextStyle get bodySm => GoogleFonts.inter(
-    fontSize: 14,
-    fontWeight: FontWeight.w400,
-    color: textSecondary,
-    height: 1.5,
-  );
+  static TextStyle get bodySm =>
+      GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5);
 
-  static TextStyle get bodyXs => GoogleFonts.inter(
-    fontSize: 12,
-    fontWeight: FontWeight.w400,
-    color: textMuted,
-    height: 1.4,
-  );
+  static TextStyle get bodyXs =>
+      GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400, height: 1.4);
 
-  static TextStyle get labelLg => GoogleFonts.inter(
-    fontSize: 16,
-    fontWeight: FontWeight.w500,
-    color: textPrimary,
-  );
+  static TextStyle get labelLg =>
+      GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500);
 
-  static TextStyle get labelMd => GoogleFonts.inter(
-    fontSize: 14,
-    fontWeight: FontWeight.w500,
-    color: textPrimary,
-  );
+  static TextStyle get labelMd =>
+      GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500);
 
   static TextStyle get labelSm => GoogleFonts.inter(
     fontSize: 12,
     fontWeight: FontWeight.w500,
-    color: textSecondary,
     letterSpacing: 0.3,
   );
 
   // ============================================================================
   // THEME DATA
   // ============================================================================
+
+  static TextTheme get _lightTextTheme => TextTheme(
+    headlineLarge: headingXl.copyWith(color: textPrimary),
+    headlineMedium: headingLg.copyWith(color: textPrimary),
+    headlineSmall: headingMd.copyWith(color: textPrimary),
+    titleLarge: headingSm.copyWith(color: textPrimary),
+    titleMedium: labelLg.copyWith(color: textPrimary),
+    titleSmall: labelMd.copyWith(color: textPrimary),
+    bodyLarge: bodyLg.copyWith(color: textPrimary),
+    bodyMedium: bodyMd.copyWith(color: textPrimary),
+    bodySmall: bodySm.copyWith(color: textSecondary),
+    labelLarge: labelLg.copyWith(color: textPrimary),
+    labelMedium: labelMd.copyWith(color: textPrimary),
+    labelSmall: labelSm.copyWith(color: textSecondary),
+  );
+
+  static TextTheme get _darkTextTheme => TextTheme(
+    headlineLarge: headingXl.copyWith(color: white),
+    headlineMedium: headingLg.copyWith(color: white),
+    headlineSmall: headingMd.copyWith(color: white),
+    titleLarge: headingSm.copyWith(color: white),
+    titleMedium: labelLg.copyWith(color: white),
+    titleSmall: labelMd.copyWith(color: white),
+    bodyLarge: bodyLg.copyWith(color: white),
+    bodyMedium: bodyMd.copyWith(color: white),
+    bodySmall: bodySm.copyWith(color: gray400),
+    labelLarge: labelLg.copyWith(color: white),
+    labelMedium: labelMd.copyWith(color: white),
+    labelSmall: labelSm.copyWith(color: gray400),
+  );
 
   static ThemeData get lightTheme {
     return ThemeData(
@@ -213,6 +213,7 @@ class AppTheme {
       ),
       scaffoldBackgroundColor: background,
       fontFamily: GoogleFonts.inter().fontFamily,
+      textTheme: _lightTextTheme,
 
       // AppBar Theme - Clean & Minimal
       appBarTheme: AppBarTheme(
@@ -222,7 +223,7 @@ class AppTheme {
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
         centerTitle: false,
-        titleTextStyle: headingSm,
+        titleTextStyle: headingSm.copyWith(color: textPrimary),
       ),
 
       // Card Theme
@@ -263,8 +264,8 @@ class AppTheme {
           horizontal: 14,
           vertical: 12,
         ),
-        hintStyle: bodySm,
-        labelStyle: bodyMd,
+        hintStyle: bodySm.copyWith(color: textSecondary),
+        labelStyle: bodyMd.copyWith(color: textPrimary),
       ),
 
       // Elevated Button Theme - Clean Primary
@@ -331,7 +332,7 @@ class AppTheme {
       // Chip Theme
       chipTheme: ChipThemeData(
         backgroundColor: gray100,
-        labelStyle: labelMd,
+        labelStyle: labelMd.copyWith(color: textPrimary),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radiusFull),
@@ -359,6 +360,170 @@ class AppTheme {
 
       // Icon Theme
       iconTheme: const IconThemeData(color: textSecondary, size: 20),
+    );
+  }
+
+  static ThemeData get darkTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: primary,
+        brightness: Brightness.dark,
+        surface: gray900,
+        background: Colors.black,
+      ),
+      scaffoldBackgroundColor: Colors.black,
+      fontFamily: GoogleFonts.inter().fontFamily,
+      textTheme: _darkTextTheme,
+
+      // AppBar Theme
+      appBarTheme: AppBarTheme(
+        backgroundColor: gray900,
+        foregroundColor: white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
+        titleTextStyle: headingSm.copyWith(color: white),
+      ),
+
+      // Card Theme
+      cardTheme: CardThemeData(
+        color: gray900,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusLg),
+          side: BorderSide(color: gray800, width: 1),
+        ),
+      ),
+
+      // Input Decoration Theme
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: gray800,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: gray700),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: gray700),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: primary, width: 1.5),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: error),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+          borderSide: const BorderSide(color: error, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
+        hintStyle: bodySm.copyWith(color: gray400),
+        labelStyle: bodyMd.copyWith(color: gray300),
+      ),
+
+      // Elevated Button Theme
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primary,
+          foregroundColor: white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(
+            horizontal: spacing6,
+            vertical: spacing4,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMd),
+          ),
+          textStyle: GoogleFonts.inter(
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+
+      // Outlined Button Theme
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: white,
+          side: const BorderSide(color: gray700),
+          padding: const EdgeInsets.symmetric(
+            horizontal: spacing6,
+            vertical: spacing4,
+          ),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(radiusMd),
+          ),
+          textStyle: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+
+      // Text Button Theme
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: primaryLight,
+          padding: const EdgeInsets.symmetric(
+            horizontal: spacing4,
+            vertical: spacing2,
+          ),
+          textStyle: GoogleFonts.inter(
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+
+      // Divider Theme
+      dividerTheme: const DividerThemeData(
+        color: gray800,
+        thickness: 1,
+        space: 1,
+      ),
+
+      // Chip Theme
+      chipTheme: ChipThemeData(
+        backgroundColor: gray800,
+        labelStyle: labelMd.copyWith(color: white),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusFull),
+        ),
+      ),
+
+      // Snackbar Theme
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: gray800,
+        contentTextStyle: bodyMd.copyWith(color: white),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusMd),
+        ),
+      ),
+
+      // Dialog Theme
+      dialogTheme: DialogThemeData(
+        backgroundColor: gray900,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radiusXl),
+        ),
+        titleTextStyle: headingMd.copyWith(color: white),
+        contentTextStyle: bodyMd.copyWith(color: gray300),
+      ),
+
+      // Icon Theme
+      iconTheme: const IconThemeData(color: gray400, size: 20),
     );
   }
 }

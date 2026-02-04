@@ -76,6 +76,7 @@ class SubscriptionService {
                 hasProAccess: hasProAccess,
                 canUpgrade: data.plan === 'free' && !data.isProFree,
                 stripeCustomerId: data.stripeCustomerId || null,
+                memberCount: (await this.db.collection('users').where('companyId', '==', companyId).count().get()).data().count,
             };
         } catch (error) {
             console.error('[Subscription] Error getting plan:', error);
