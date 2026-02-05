@@ -25,6 +25,12 @@ yarn-error.log*
 .env.*.local
 backend/firebase-service-account.json
 
+# WhatsApp Web.js (session data)
+.wwebjs_auth/
+.wwebjs_cache/
+backend/.wwebjs_auth/
+backend/.wwebjs_cache/
+
 # Flutter / Dart (Frontend)
 # (Note: frontend/.gitignore may already handle these, but including them here is safe)
 .dart_tool/
