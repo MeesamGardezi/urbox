@@ -267,6 +267,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     route: '/settings',
                     isSelected: currentLocation == '/settings',
                   ),
+
+                  const SizedBox(height: AppTheme.spacing6),
+
+                  if (!_isSidebarCollapsed) _buildSectionHeader('INTEGRATIONS'),
+                  if (!_isSidebarCollapsed)
+                    const SizedBox(height: AppTheme.spacing2),
+                  _buildNavItem(
+                    icon: Icons.chat_outlined,
+                    activeIcon: Icons.chat,
+                    label: 'WhatsApp',
+                    route: '/whatsapp',
+                    isSelected: currentLocation == '/whatsapp',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.cloud_outlined,
+                    activeIcon: Icons.cloud,
+                    label: 'Storage',
+                    route: '/storage',
+                    isSelected: currentLocation == '/storage',
+                  ),
                 ],
               ),
             ),

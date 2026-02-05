@@ -6,6 +6,8 @@ import '../../auth/screens/auth_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/plans_screen.dart';
 import '../screens/settings_screen.dart';
+import '../../whatsapp/screens/whatsapp_screen.dart';
+import '../../storage/screens/storage_screen.dart';
 
 /// App Router Configuration
 ///
@@ -236,6 +238,22 @@ class AppRouter {
             name: 'settings',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: SettingsScreen()),
+          ),
+
+          // WhatsApp Integration
+          GoRoute(
+            path: '/whatsapp',
+            name: 'whatsapp',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: WhatsAppScreen()),
+          ),
+
+          // Storage
+          GoRoute(
+            path: '/storage',
+            name: 'storage',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: StorageScreen()),
           ),
         ],
       ),

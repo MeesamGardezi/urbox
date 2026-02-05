@@ -1,0 +1,5 @@
+2026/02/05-20:03:57.119 50bfd Creating DB /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-y00sN9CEDKUDJpa9HX2kK1rP8uG2/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb since it was missing.
+2026/02/05-20:03:57.122 50bfd Reusing MANIFEST /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-y00sN9CEDKUDJpa9HX2kK1rP8uG2/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/02/05-20:04:21.044 50c00 Level-0 table #5: started
+2026/02/05-20:04:21.066 50c00 Level-0 table #5: 1071228 bytes OK
+2026/02/05-20:04:21.069 50c00 Delete type=0 #3

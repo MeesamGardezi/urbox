@@ -1,9 +1,10 @@
 /**
- * Shared Mailbox - Main Server
+ * URBox Backend Server
  * 
  * Handles:
  * - Express server setup
  * - Firebase Admin initialization
+ * - WhatsApp Session Management
  * - Route registration
  * - Middleware configuration
  * 
@@ -28,12 +29,15 @@ const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
 if (missingEnvVars.length > 0) {
     console.error('❌ Missing required environment variables:');
     missingEnvVars.forEach(varName => console.error(`   - ${varName}`));
-    console.error('\n💡 Run: npm run generate-keys');
+    console.error('\n💡 Run: npm run keys');
     console.error('   Then add the keys to your .env file\n');
     process.exit(1);
 }
 
-// Initialize Firebase Admin
+// ============================================================================
+// FIREBASE INITIALIZATION
+// ============================================================================
+
 let db;
 
 if (!admin.apps.length) {
@@ -66,62 +70,67 @@ db.settings({
     databaseId: 'urbox-database'
 });
 
-// Function to verify Firestore connection
+// ============================================================================
+// FIRESTORE CONNECTION VERIFICATION
+// ============================================================================
+
 async function verifyFirestoreConnection() {
-    console.log('\n🔍 Verifying Firestore connection...');
-
     try {
-        // Try a simple write/read to verify connection
-        const testDocRef = db.collection('_connection_test').doc('test');
-
-        await testDocRef.set({
-            timestamp: admin.firestore.FieldValue.serverTimestamp(),
-            test: true
-        });
-
-        const testDoc = await testDocRef.get();
-
-        if (testDoc.exists) {
-            console.log('✓ Firestore connection verified successfully!');
-            // Clean up test document
-            await testDocRef.delete();
-            return true;
-        } else {
-            console.error('❌ Firestore test document was not created');
-            return false;
-        }
+        console.log('Verifying Firestore connection...');
+        // Just try to list collections - simple check that works
+        await db.listCollections();
+        console.log('✓ Firestore connection verified\n');
+        return true;
     } catch (error) {
-        console.error('❌ Firestore connection failed!');
-        console.error(`   Error Code: ${error.code}`);
-        console.error(`   Error Message: ${error.message}`);
-
-        if (error.code === 5 || error.message.includes('NOT_FOUND')) {
-            console.error('\n💡 SOLUTION: The Firestore database does not exist.');
-            console.error('   1. Go to Firebase Console: https://console.firebase.google.com');
-            console.error('   2. Select your project');
-            console.error('   3. Click "Firestore Database" in the sidebar');
-            console.error('   4. Click "Create database"');
-            console.error('   5. Choose a location and security rules');
-            console.error('   6. Restart this server\n');
-        } else if (error.code === 7 || error.message.includes('PERMISSION_DENIED')) {
-            console.error('\n💡 SOLUTION: Permission denied.');
-            console.error('   1. Check your Firestore security rules');
-            console.error('   2. Verify the service account has correct permissions');
-            console.error('   3. In Firebase Console > Project Settings > Service Accounts');
-            console.error('   4. Ensure the service account has "Firebase Admin SDK" role\n');
-        }
-
+        console.error('\n❌ FIRESTORE CONNECTION FAILED');
+        console.error('   Error code:', error.code);
+        console.error('   Error message:', error.message);
         return false;
     }
 }
 
-// Import routes
+// ============================================================================
+// WHATSAPP SESSION MANAGER INITIALIZATION
+// ============================================================================
+
+const WhatsAppSessionManager = require('./whatsapp/session-manager');
+const whatsappSessionManager = new WhatsAppSessionManager(db);
+
+// Restore active sessions on startup
+whatsappSessionManager.restoreSessions();
+
+// Graceful cleanup on shutdown
+process.on('SIGTERM', async () => {
+    console.log('\n⚠️  SIGTERM received, cleaning up WhatsApp sessions...');
+    await whatsappSessionManager.cleanup();
+    process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+    console.log('\n⚠️  SIGINT received, cleaning up WhatsApp sessions...');
+    await whatsappSessionManager.cleanup();
+    process.exit(0);
+});
+
+// ============================================================================
+// IMPORT ROUTES
+// ============================================================================
+
 const createAuthRoutes = require('./auth/auth');
 const createTeamRoutes = require('./team/team');
 const createSubscriptionRoutes = require('./core/subscription');
 const createPaymentRoutes = require('./payment/payments');
+const createWhatsAppRoutes = require('./whatsapp/whatsapp');
+const createStorageRoutes = require('./storage/storage');
+const { StorageService } = require('./storage/storage-service');
 
-// Create Express app
+// Initialize Storage Service
+const storageService = new StorageService();
+
+// ============================================================================
+// EXPRESS APP SETUP
+// ============================================================================
+
 const app = express();
 const PORT = process.env.PORT || 3004;
 
@@ -139,32 +148,49 @@ app.use((req, res, next) => {
 
 app.use(express.urlencoded({ extended: true }));
 
-// Health check endpoint with Firestore status
+// ============================================================================
+// HEALTH CHECK
+// ============================================================================
+
 app.get('/health', async (req, res) => {
     let firestoreStatus = 'unknown';
+    let whatsappStatus = 'unknown';
 
     try {
-        // Quick Firestore check
         await db.collection('_health').doc('check').get();
         firestoreStatus = 'connected';
     } catch (error) {
         firestoreStatus = `error: ${error.code || error.message}`;
     }
 
+    // Check active WhatsApp sessions
+    const activeSessions = whatsappSessionManager.activeSessions.size;
+    whatsappStatus = `${activeSessions} active session${activeSessions !== 1 ? 's' : ''}`;
+
     res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: '1.0.0',
         environment: process.env.NODE_ENV || 'development',
-        firestore: firestoreStatus
+        firestore: firestoreStatus,
+        whatsapp: whatsappStatus
     });
 });
 
-// Register routes
+// ============================================================================
+// REGISTER ROUTES
+// ============================================================================
+
 app.use('/api/auth', createAuthRoutes(db));
 app.use('/api/team', createTeamRoutes(db));
 app.use('/api/subscription', createSubscriptionRoutes(db));
 app.use('/api/payment', createPaymentRoutes(db));
+app.use('/api/whatsapp', createWhatsAppRoutes(db, whatsappSessionManager));
+app.use('/api/storage', createStorageRoutes(storageService, db));
+
+// ============================================================================
+// ERROR HANDLERS
+// ============================================================================
 
 // 404 handler
 app.use((req, res) => {
@@ -185,7 +211,10 @@ app.use((err, req, res, next) => {
     });
 });
 
-// Start server with Firestore verification
+// ============================================================================
+// START SERVER
+// ============================================================================
+
 async function startServer() {
     // Verify Firestore connection before starting
     const firestoreOk = await verifyFirestoreConnection();
@@ -198,12 +227,13 @@ async function startServer() {
 
     app.listen(PORT, () => {
         console.log('\n==========================================================');
-        console.log('         SHARED MAILBOX BACKEND');
+        console.log('              URBOX BACKEND');
         console.log('==========================================================');
         console.log(`✓ Server running on port ${PORT}`);
         console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
         console.log(`✓ App URL: ${process.env.APP_URL || 'http://localhost:8080'}`);
         console.log(`✓ Firestore: Connected`);
+        console.log(`✓ WhatsApp: Session Manager Active`);
         console.log('\n📡 Available endpoints:');
         console.log('   GET  /health');
         console.log('   POST /api/auth/signup');
@@ -214,24 +244,32 @@ async function startServer() {
         console.log('   GET  /api/subscription/plan');
         console.log('   POST /api/payment/create-checkout-session');
         console.log('   POST /api/payment/create-portal-session');
+        console.log('\n📱 WhatsApp endpoints:');
+        console.log('   GET  /api/whatsapp/status');
+        console.log('   GET  /api/whatsapp/qr');
+        console.log('   POST /api/whatsapp/connect');
+        console.log('   POST /api/whatsapp/disconnect');
+        console.log('   POST /api/whatsapp/cancel');
+        console.log('   GET  /api/whatsapp/groups');
+        console.log('   POST /api/whatsapp/monitor');
+        console.log('   GET  /api/whatsapp/monitored');
+        console.log('   GET  /api/whatsapp/messages');
         console.log('\n🔐 Admin endpoints:');
         console.log('   POST /api/subscription/admin/grant-pro-free');
         console.log('   POST /api/subscription/admin/revoke-pro-free');
         console.log('   GET  /api/subscription/admin/list-pro-free');
+        console.log('\n📁 Storage endpoints:');
+        console.log('   GET  /api/storage/list');
+        console.log('   POST /api/storage/upload');
+        console.log('   GET  /api/storage/download/*');
+        console.log('   DELETE /api/storage/delete/*');
+        console.log('   POST /api/storage/folder');
+        console.log('   DELETE /api/storage/folder/*');
+        console.log('   GET  /api/storage/presigned/upload');
+        console.log('   GET  /api/storage/presigned/download/*');
         console.log('\n==========================================================\n');
     });
 }
 
 // Start the server
 startServer();
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('\n⚠️  SIGTERM received, shutting down gracefully...');
-    process.exit(0);
-});
-
-process.on('SIGINT', () => {
-    console.log('\n⚠️  SIGINT received, shutting down gracefully...');
-    process.exit(0);
-});

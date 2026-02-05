@@ -1,0 +1,15 @@
+2026/02/05-21:59:55.870 6a2a3 Reusing MANIFEST /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/02/05-21:59:55.871 6a2a3 Recovering log #435
+2026/02/05-21:59:55.872 6a2a3 Reusing old log /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000435.log 
+2026/02/05-22:57:27.839 6a2a6 Compacting 1@1 + 5@2 files
+2026/02/05-22:57:27.893 6a2a6 Generated table #451@1: 100632 keys, 2250357 bytes
+2026/02/05-22:57:27.949 6a2a6 Generated table #452@1: 100585 keys, 2250195 bytes
+2026/02/05-22:57:27.961 6a2a6 Generated table #453@1: 15552 keys, 422239 bytes
+2026/02/05-22:57:27.961 6a2a6 Compacted 1@1 + 5@2 files => 4922791 bytes
+2026/02/05-22:57:27.963 6a2a6 compacted to: files[ 0 0 14 0 0 0 0 ]
+2026/02/05-22:57:27.963 6a2a6 Delete type=2 #438
+2026/02/05-22:57:27.963 6a2a6 Delete type=2 #433
+2026/02/05-22:57:27.963 6a2a6 Delete type=2 #422
+2026/02/05-22:57:27.963 6a2a6 Delete type=2 #421
+2026/02/05-22:57:27.963 6a2a6 Delete type=2 #420
+2026/02/05-22:57:27.963 6a2a6 Delete type=2 #330

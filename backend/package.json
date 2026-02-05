@@ -13,11 +13,15 @@
     "shared-mailbox",
     "email",
     "authentication",
-    "subscription"
+    "subscription",
+    "whatsapp"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.983.0",
+    "@aws-sdk/lib-storage": "^3.983.0",
+    "@aws-sdk/s3-request-presigner": "^3.983.0",
     "@azure/msal-node": "^2.6.0",
     "axios": "^1.6.2",
     "cors": "^2.8.5",
@@ -25,8 +29,11 @@
     "express": "^4.18.2",
     "firebase-admin": "^12.1.1",
     "googleapis": "^130.0.0",
+    "multer": "^2.0.2",
     "nodemailer": "^6.9.7",
-    "stripe": "^14.10.0"
+    "qrcode-terminal": "^0.12.0",
+    "stripe": "^14.10.0",
+    "whatsapp-web.js": "^1.34.6"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

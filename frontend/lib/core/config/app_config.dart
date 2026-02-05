@@ -2,17 +2,116 @@
 ///
 /// Centralized configuration for API endpoints and app settings
 class AppConfig {
-  // API Configuration
+  // ============================================================================
+  // API CONFIGURATION
+  // ============================================================================
+
+  /// Base URL for the backend API
   static const String apiBaseUrl = 'http://localhost:3004';
 
-  // API Endpoints
+  /// API Endpoints
   static const String authEndpoint = '$apiBaseUrl/api/auth';
   static const String teamEndpoint = '$apiBaseUrl/api/team';
   static const String subscriptionEndpoint = '$apiBaseUrl/api/subscription';
   static const String paymentEndpoint = '$apiBaseUrl/api/payment';
+  static const String whatsappEndpoint = '$apiBaseUrl/api/whatsapp';
 
-  // App Settings
-  static const String appName = 'Shared Mailbox';
+  // ============================================================================
+  // WHATSAPP API ENDPOINTS
+  // ============================================================================
+
+  /// WhatsApp session status
+  static String whatsappStatus(String userId) =>
+      '$whatsappEndpoint/status?userId=$userId';
+
+  /// WhatsApp QR code
+  static String whatsappQr(String userId) =>
+      '$whatsappEndpoint/qr?userId=$userId';
+
+  /// WhatsApp connect
+  static String get whatsappConnect => '$whatsappEndpoint/connect';
+
+  /// WhatsApp disconnect
+  static String get whatsappDisconnect => '$whatsappEndpoint/disconnect';
+
+  /// WhatsApp cancel pending connection
+  static String get whatsappCancel => '$whatsappEndpoint/cancel';
+
+  /// WhatsApp groups
+  static String whatsappGroups(String userId) =>
+      '$whatsappEndpoint/groups?userId=$userId';
+
+  /// WhatsApp monitored groups
+  static String whatsappMonitored(String userId) =>
+      '$whatsappEndpoint/monitored?userId=$userId';
+
+  /// WhatsApp monitor toggle
+  static String get whatsappMonitor => '$whatsappEndpoint/monitor';
+
+  /// WhatsApp messages
+  static String whatsappMessages({
+    required String userId,
+    String? groupId,
+    int limit = 50,
+    String? startAfter,
+    String? searchQuery,
+  }) {
+    var url = '$whatsappEndpoint/messages?userId=$userId&limit=$limit';
+    if (groupId != null) url += '&groupId=$groupId';
+    if (startAfter != null) url += '&startAfter=$startAfter';
+    if (searchQuery != null && searchQuery.isNotEmpty)
+      url += '&searchQuery=$searchQuery';
+    return url;
+  }
+
+  /// WhatsApp message count
+  static String whatsappMessageCount({required String userId, String? since}) {
+    var url = '$whatsappEndpoint/messages/count?userId=$userId';
+    if (since != null) url += '&since=$since';
+    return url;
+  }
+
+  // ============================================================================
+  // STORAGE API ENDPOINTS
+  // ============================================================================
+
+  /// Storage base endpoint
+  static const String storageEndpoint = '$apiBaseUrl/api/storage';
+
+  /// List files endpoint
+  static String get storageListEndpoint => '$storageEndpoint/list';
+
+  /// Upload file endpoint
+  static String get storageUploadEndpoint => '$storageEndpoint/upload';
+
+  /// Create folder endpoint
+  static String get storageFolderEndpoint => '$storageEndpoint/folder';
+
+  /// Download file endpoint (key will be appended)
+  static String storageDownloadEndpoint(String key) =>
+      '$storageEndpoint/download/$key';
+
+  /// Delete file endpoint (key will be appended)
+  static String storageDeleteEndpoint(String key) =>
+      '$storageEndpoint/delete/$key';
+
+  /// Delete folder endpoint (name will be appended)
+  static String storageDeleteFolderEndpoint(String name) =>
+      '$storageEndpoint/folder/$name';
+
+  /// Presigned upload URL endpoint
+  static String get storagePresignedUploadEndpoint =>
+      '$storageEndpoint/presigned/upload';
+
+  /// Presigned download URL endpoint (key will be appended)
+  static String storagePresignedDownloadEndpoint(String key) =>
+      '$storageEndpoint/presigned/download/$key';
+
+  // ============================================================================
+  // APP SETTINGS
+  // ============================================================================
+
+  static const String appName = 'URBox';
   static const String appVersion = '1.0.0';
 
   // Production URLs (update when deploying)

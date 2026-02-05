@@ -84,23 +84,23 @@ class _PlansScreenState extends State<PlansScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.spacing8),
+      padding: const EdgeInsets.all(AppTheme.spacing6),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1400),
+          constraints: const BoxConstraints(maxWidth: 1200),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _buildHeader(context),
-              const SizedBox(height: AppTheme.spacing8),
+              const SizedBox(height: AppTheme.spacing5),
               if (_company != null) _buildCurrentPlanBanner(context),
-              if (_company != null) const SizedBox(height: AppTheme.spacing8),
+              if (_company != null) const SizedBox(height: AppTheme.spacing5),
               _buildPricingToggle(context),
-              const SizedBox(height: AppTheme.spacing8),
+              const SizedBox(height: AppTheme.spacing5),
               _buildPricingCards(context),
-              const SizedBox(height: AppTheme.spacing12),
+              const SizedBox(height: AppTheme.spacing8),
               _buildFeatureComparison(context),
-              const SizedBox(height: AppTheme.spacing12),
+              const SizedBox(height: AppTheme.spacing6),
               _buildFAQ(context),
             ],
           ),
@@ -121,16 +121,16 @@ class _PlansScreenState extends State<PlansScreen> {
         Text(
           'Plans & Billing',
           style: AppTheme.headingXl.copyWith(
-            fontSize: 36,
+            fontSize: 24,
             fontWeight: FontWeight.w700,
-            letterSpacing: -1,
+            letterSpacing: -0.5,
             color: textColor,
           ),
         ),
-        const SizedBox(height: AppTheme.spacing3),
+        const SizedBox(height: AppTheme.spacing2),
         Text(
           'Choose the perfect plan for your team. Upgrade, downgrade, or cancel anytime.',
-          style: AppTheme.bodyLg.copyWith(color: mutedColor, height: 1.6),
+          style: AppTheme.bodyMd.copyWith(color: mutedColor, height: 1.5),
         ),
       ],
     );
@@ -146,7 +146,7 @@ class _PlansScreenState extends State<PlansScreen> {
     final mutedColor = isDark ? AppTheme.gray400 : AppTheme.textMuted;
 
     return Container(
-      padding: const EdgeInsets.all(AppTheme.spacing6),
+      padding: const EdgeInsets.all(AppTheme.spacing4),
       decoration: BoxDecoration(
         gradient: isProFree || hasPro
             ? AppTheme.primaryGradient
@@ -155,7 +155,7 @@ class _PlansScreenState extends State<PlansScreen> {
                     ? [AppTheme.gray800, AppTheme.gray900]
                     : [AppTheme.gray100, AppTheme.gray50],
               ),
-        borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+        borderRadius: BorderRadius.circular(AppTheme.radiusLg),
         border: Border.all(
           color: isProFree || hasPro
               ? Colors.transparent
@@ -165,20 +165,20 @@ class _PlansScreenState extends State<PlansScreen> {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(AppTheme.spacing4),
+            padding: const EdgeInsets.all(AppTheme.spacing3),
             decoration: BoxDecoration(
               color: (isProFree || hasPro)
                   ? Colors.white.withOpacity(0.2)
                   : (isDark ? AppTheme.gray800 : Colors.white),
-              borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+              borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
             child: Icon(
               isProFree || hasPro ? Icons.workspace_premium : Icons.inbox,
               color: isProFree || hasPro ? Colors.white : AppTheme.primary,
-              size: 32,
+              size: 24,
             ),
           ),
-          const SizedBox(width: AppTheme.spacing4),
+          const SizedBox(width: AppTheme.spacing3),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,19 +189,19 @@ class _PlansScreenState extends State<PlansScreen> {
                       : hasPro
                       ? 'Pro Plan - Active'
                       : 'Free Plan',
-                  style: AppTheme.headingMd.copyWith(
+                  style: AppTheme.labelLg.copyWith(
                     color: isProFree || hasPro ? Colors.white : textColor,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: AppTheme.spacing1),
+                const SizedBox(height: 2),
                 Text(
                   isProFree
                       ? 'You have special VIP access with all Pro features'
                       : hasPro
                       ? 'Enjoying unlimited inboxes and premium features'
                       : 'Limited to 1 shared inbox',
-                  style: AppTheme.bodyMd.copyWith(
+                  style: AppTheme.bodySm.copyWith(
                     color: isProFree || hasPro
                         ? Colors.white.withOpacity(0.9)
                         : mutedColor,
@@ -213,8 +213,8 @@ class _PlansScreenState extends State<PlansScreen> {
           if (isFree && !isProFree)
             Container(
               padding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacing4,
-                vertical: AppTheme.spacing2,
+                horizontal: AppTheme.spacing3,
+                vertical: AppTheme.spacing1,
               ),
               decoration: BoxDecoration(
                 color: AppTheme.primary,
@@ -222,7 +222,7 @@ class _PlansScreenState extends State<PlansScreen> {
               ),
               child: Text(
                 'Current Plan',
-                style: AppTheme.labelMd.copyWith(
+                style: AppTheme.labelSm.copyWith(
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                 ),
@@ -370,24 +370,24 @@ class _PlansScreenState extends State<PlansScreen> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       child: Card(
-        elevation: isPopular ? 8 : 0,
+        elevation: isPopular ? 4 : 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusXl),
+          borderRadius: BorderRadius.circular(AppTheme.radiusLg),
           side: BorderSide(
             color: isPopular ? AppTheme.primary : AppTheme.border,
             width: isPopular ? 2 : 1,
           ),
         ),
         child: Container(
-          padding: const EdgeInsets.all(AppTheme.spacing8),
+          padding: const EdgeInsets.all(AppTheme.spacing5),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (isPopular)
                 Container(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacing3,
-                    vertical: AppTheme.spacing1,
+                    horizontal: AppTheme.spacing2,
+                    vertical: 4,
                   ),
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGradient,
@@ -398,25 +398,26 @@ class _PlansScreenState extends State<PlansScreen> {
                     style: AppTheme.labelSm.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
-                      letterSpacing: 1,
+                      letterSpacing: 0.5,
+                      fontSize: 10,
                     ),
                   ),
                 ),
-              if (isPopular) const SizedBox(height: AppTheme.spacing4),
+              if (isPopular) const SizedBox(height: AppTheme.spacing3),
 
               Text(
                 name,
-                style: AppTheme.headingLg.copyWith(
+                style: AppTheme.headingMd.copyWith(
                   fontWeight: FontWeight.w700,
                   color: textColor,
                 ),
               ),
-              const SizedBox(height: AppTheme.spacing2),
+              const SizedBox(height: AppTheme.spacing1),
               Text(
                 description,
-                style: AppTheme.bodyMd.copyWith(color: mutedColor),
+                style: AppTheme.bodySm.copyWith(color: mutedColor),
               ),
-              const SizedBox(height: AppTheme.spacing6),
+              const SizedBox(height: AppTheme.spacing4),
 
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -424,23 +425,23 @@ class _PlansScreenState extends State<PlansScreen> {
                   Text(
                     price,
                     style: TextStyle(
-                      fontSize: 48,
+                      fontSize: 32,
                       fontWeight: FontWeight.w800,
                       color: textColor,
                       height: 1,
                     ),
                   ),
-                  const SizedBox(width: AppTheme.spacing2),
+                  const SizedBox(width: AppTheme.spacing1),
                   Padding(
-                    padding: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.only(top: 8),
                     child: Text(
                       period,
-                      style: AppTheme.bodyMd.copyWith(color: mutedColor),
+                      style: AppTheme.bodySm.copyWith(color: mutedColor),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: AppTheme.spacing8),
+              const SizedBox(height: AppTheme.spacing4),
 
               SizedBox(
                 width: double.infinity,
@@ -452,42 +453,42 @@ class _PlansScreenState extends State<PlansScreen> {
                         : AppTheme.gray800,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                      vertical: AppTheme.spacing4,
+                      vertical: AppTheme.spacing3,
                     ),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+                      borderRadius: BorderRadius.circular(AppTheme.radiusMd),
                     ),
                   ),
                   child: Text(
                     isCurrent ? 'Current Plan' : 'Get Started',
-                    style: AppTheme.labelLg.copyWith(
+                    style: AppTheme.labelMd.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
               ),
 
-              const SizedBox(height: AppTheme.spacing8),
+              const SizedBox(height: AppTheme.spacing4),
               const Divider(),
-              const SizedBox(height: AppTheme.spacing6),
+              const SizedBox(height: AppTheme.spacing3),
 
               ...features
                   .map(
                     (feature) => Padding(
-                      padding: const EdgeInsets.only(bottom: AppTheme.spacing3),
+                      padding: const EdgeInsets.only(bottom: AppTheme.spacing2),
                       child: Row(
                         children: [
                           Icon(
                             Icons.check_circle,
                             color: AppTheme.success,
-                            size: 20,
+                            size: 16,
                           ),
-                          const SizedBox(width: AppTheme.spacing3),
+                          const SizedBox(width: AppTheme.spacing2),
                           Expanded(
                             child: Text(
                               feature,
-                              style: AppTheme.bodyMd.copyWith(color: textColor),
+                              style: AppTheme.bodySm.copyWith(color: textColor),
                             ),
                           ),
                         ],
@@ -510,23 +511,23 @@ class _PlansScreenState extends State<PlansScreen> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacing8),
+        padding: const EdgeInsets.all(AppTheme.spacing5),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Compare Plans',
-              style: AppTheme.headingLg.copyWith(
+              style: AppTheme.headingMd.copyWith(
                 fontWeight: FontWeight.w700,
                 color: textColor,
               ),
             ),
-            const SizedBox(height: AppTheme.spacing2),
+            const SizedBox(height: AppTheme.spacing1),
             Text(
               'See what\'s included in each plan',
-              style: AppTheme.bodyMd.copyWith(color: mutedColor),
+              style: AppTheme.bodySm.copyWith(color: mutedColor),
             ),
-            const SizedBox(height: AppTheme.spacing8),
+            const SizedBox(height: AppTheme.spacing4),
 
             Table(
               columnWidths: const {
@@ -584,10 +585,10 @@ class _PlansScreenState extends State<PlansScreen> {
         Theme.of(context).textTheme.bodyLarge?.color ?? Colors.white;
 
     return Padding(
-      padding: const EdgeInsets.all(AppTheme.spacing4),
+      padding: const EdgeInsets.all(AppTheme.spacing3),
       child: Text(
         text,
-        style: AppTheme.labelMd.copyWith(
+        style: AppTheme.labelSm.copyWith(
           fontWeight: FontWeight.w700,
           color: textColor,
         ),
@@ -613,23 +614,23 @@ class _PlansScreenState extends State<PlansScreen> {
       content = Icon(
         value ? Icons.check_circle : Icons.remove_circle_outline,
         color: value ? AppTheme.success : mutedColor,
-        size: 20,
+        size: 16,
       );
     } else {
       content = Text(
         value.toString(),
         style: isHeader
-            ? AppTheme.bodyMd.copyWith(
+            ? AppTheme.bodySm.copyWith(
                 fontWeight: FontWeight.w500,
                 color: textColor,
               )
-            : AppTheme.bodyMd.copyWith(color: mutedColor),
+            : AppTheme.bodySm.copyWith(color: mutedColor),
         textAlign: centered ? TextAlign.center : TextAlign.left,
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.all(AppTheme.spacing4),
+      padding: const EdgeInsets.all(AppTheme.spacing2),
       child: centered ? Center(child: content) : content,
     );
   }
@@ -640,18 +641,18 @@ class _PlansScreenState extends State<PlansScreen> {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(AppTheme.spacing8),
+        padding: const EdgeInsets.all(AppTheme.spacing5),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Frequently Asked Questions',
-              style: AppTheme.headingLg.copyWith(
+              style: AppTheme.headingMd.copyWith(
                 fontWeight: FontWeight.w700,
                 color: textColor,
               ),
             ),
-            const SizedBox(height: AppTheme.spacing6),
+            const SizedBox(height: AppTheme.spacing4),
 
             _buildFAQItem(
               context,
@@ -694,21 +695,21 @@ class _PlansScreenState extends State<PlansScreen> {
     final mutedColor = isDark ? AppTheme.gray400 : AppTheme.textMuted;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: AppTheme.spacing6),
+      padding: const EdgeInsets.only(bottom: AppTheme.spacing4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             question,
-            style: AppTheme.labelLg.copyWith(
+            style: AppTheme.labelMd.copyWith(
               fontWeight: FontWeight.w600,
               color: textColor,
             ),
           ),
-          const SizedBox(height: AppTheme.spacing2),
+          const SizedBox(height: AppTheme.spacing1),
           Text(
             answer,
-            style: AppTheme.bodyMd.copyWith(color: mutedColor, height: 1.6),
+            style: AppTheme.bodySm.copyWith(color: mutedColor, height: 1.5),
           ),
         ],
       ),
