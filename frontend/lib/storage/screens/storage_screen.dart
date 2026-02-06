@@ -3,13 +3,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'folder_tree_selector.dart';
 import '../models/storage_model.dart';
 import '../services/storage_service.dart';
 import '../../auth/services/auth_service.dart';
 
 /// Storage Screen
 ///
-/// File browser interface with folder navigation, upload, and file management
+/// Clean, minimalistic file browser with folder navigation and file management
 class StorageScreen extends StatefulWidget {
   const StorageScreen({super.key});
 
@@ -21,11 +22,18 @@ class _StorageScreenState extends State<StorageScreen> {
   StorageService? _storageService;
   List<StorageFile> _files = [];
   bool _isLoading = true;
-  String _currentPath = ''; // e.g. "folder1/subfolder/"
+  String _currentPath = '';
   String? _companyId;
 
+  // Selection mode
+  Set<String> _selectedItems = {};
+
+  // Upload tracking
   List<UploadItem> _uploadTasks = [];
   bool _isUploadsMinimized = false;
+
+  // View mode
+  bool _isGridView = false; // Default to list view
 
   /// Breadcrumb navigation parts
   List<String> get _breadcrumbs {
@@ -72,9 +80,7 @@ class _StorageScreenState extends State<StorageScreen> {
       debugPrint('Error loading user data: $e');
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading profile: $e')));
+        _showError('Error loading profile: $e');
       }
     }
   }
@@ -85,7 +91,6 @@ class _StorageScreenState extends State<StorageScreen> {
     setState(() => _isLoading = true);
     try {
       final files = await _storageService!.listFiles(prefix: _currentPath);
-      // Sort: Folders first, then files alphabetically
       files.sort((a, b) {
         if (a.isFolder && !b.isFolder) return -1;
         if (!a.isFolder && b.isFolder) return 1;
@@ -94,28 +99,90 @@ class _StorageScreenState extends State<StorageScreen> {
       setState(() {
         _files = files;
         _isLoading = false;
+        _selectedItems.clear();
       });
     } catch (e) {
       setState(() => _isLoading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error loading files: $e')));
+        _showError('Error loading files: $e');
       }
     }
   }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFFDC2626),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: const Color(0xFF059669),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+      ),
+    );
+  }
+
+  // ============================================================================
+  // NAVIGATION
+  // ============================================================================
+
+  void _navigateToFolder(String folderName) {
+    if (_isLoading) return;
+    setState(() {
+      _currentPath += '$folderName/';
+      _isLoading = true;
+    });
+    _loadFiles();
+  }
+
+  void _jumpToBreadcrumb(int index) {
+    final parts = _breadcrumbs;
+    String newPath = '';
+    for (int i = 0; i <= index; i++) {
+      newPath += '${parts[i]}/';
+    }
+
+    if (newPath == _currentPath) return;
+
+    setState(() {
+      _currentPath = newPath;
+      _isLoading = true;
+    });
+    _loadFiles();
+  }
+
+  void _goHome() {
+    if (_currentPath.isEmpty) return;
+    setState(() {
+      _currentPath = '';
+      _isLoading = true;
+    });
+    _loadFiles();
+  }
+
+  // ============================================================================
+  // FILE OPERATIONS
+  // ============================================================================
 
   Future<void> _uploadFile() async {
     if (_storageService == null) return;
 
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
-        withData: true, // Needed for web
+        withData: true,
         allowMultiple: true,
       );
 
       if (result != null) {
-        // Expand overlay if hidden
         if (mounted) setState(() => _isUploadsMinimized = false);
 
         for (final file in result.files) {
@@ -133,15 +200,12 @@ class _StorageScreenState extends State<StorageScreen> {
             });
           }
 
-          // Start upload without blocking UI
           _performUpload(task, file);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Pick file failed: $e')));
+        _showError('Pick file failed: $e');
       }
     }
   }
@@ -170,26 +234,40 @@ class _StorageScreenState extends State<StorageScreen> {
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Folder'),
+      builder: (context) => _CleanDialog(
+        title: 'New Folder',
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Folder Name',
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            hintText: 'Enter folder name',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: const BorderSide(
+                color: Color(0xFF3B82F6),
+                width: 1.5,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
           ),
           autofocus: true,
+          onSubmitted: (val) => Navigator.pop(context, val),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Create'),
-          ),
-        ],
+        primaryLabel: 'Create',
+        onPrimary: () => Navigator.pop(context, controller.text),
       ),
     );
 
@@ -199,13 +277,148 @@ class _StorageScreenState extends State<StorageScreen> {
         if (_storageService != null) {
           final newFolderPath = _currentPath + name;
           await _storageService!.createFolder(newFolderPath);
+          _showSuccess('Folder created');
           await _loadFiles();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Create folder failed: $e')));
+          _showError('Create folder failed: $e');
+        }
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _renameItem(StorageFile item) async {
+    print('[StorageScreen] Requested rename for: ${item.name} (${item.key})');
+    final controller = TextEditingController(text: item.name);
+    final newName = await showDialog<String>(
+      context: context,
+      builder: (context) => _CleanDialog(
+        title: 'Rename',
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'Enter new name',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            filled: true,
+            fillColor: const Color(0xFFF8FAFC),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: BorderSide(color: Colors.grey.shade200),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(6),
+              borderSide: const BorderSide(
+                color: Color(0xFF3B82F6),
+                width: 1.5,
+              ),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 12,
+            ),
+          ),
+          autofocus: true,
+          onSubmitted: (val) => Navigator.pop(context, val),
+        ),
+        primaryLabel: 'Rename',
+        onPrimary: () => Navigator.pop(context, controller.text),
+      ),
+    );
+
+    print('[StorageScreen] Rename dialog returned: "$newName"');
+
+    if (newName != null && newName.isNotEmpty && newName != item.name) {
+      setState(() => _isLoading = true);
+      try {
+        if (_storageService != null) {
+          print('[StorageScreen] Calling service.renameFile');
+          await _storageService!.renameFile(item.key, newName);
+          _showSuccess('Renamed successfully');
+          await _loadFiles();
+        }
+      } catch (e) {
+        print('[StorageScreen] Rename failed: $e');
+        if (mounted) {
+          _showError('Rename failed: $e');
+        }
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _moveItem(StorageFile item) async {
+    if (_storageService == null) return;
+
+    print('[StorageScreen] Requested move for: ${item.name}');
+    setState(() => _isLoading = true);
+
+    List<Map<String, dynamic>> folders = [];
+    try {
+      folders = await _storageService!.getFolders();
+    } catch (e) {
+      folders = [
+        {'key': '', 'name': 'Root'},
+      ];
+    }
+
+    setState(() => _isLoading = false);
+
+    final availableFolders = folders.where((f) {
+      final folderKey = f['key'] as String;
+      if (item.isFolder && folderKey.startsWith(item.key)) return false;
+      return true;
+    }).toList();
+
+    if (!mounted) return;
+
+    String? selectedFolder;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => _CleanDialog(
+          title: 'Move to',
+          content: Container(
+            constraints: const BoxConstraints(maxHeight: 300, minWidth: 300),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: FolderTreeSelector(
+              folders: availableFolders,
+              initialSelection: selectedFolder,
+              onSelect: (key) {
+                setDialogState(() => selectedFolder = key);
+              },
+            ),
+          ),
+          primaryLabel: 'Move',
+          primaryEnabled: selectedFolder != null,
+          onPrimary: () => Navigator.pop(context, selectedFolder),
+        ),
+      ),
+    );
+
+    if (result != null) {
+      // Check if moving to the same folder
+      if (result == _currentPath) {
+        return;
+      }
+
+      setState(() => _isLoading = true);
+      try {
+        await _storageService!.moveFile(item.key, result);
+        _showSuccess('Moved successfully');
+        await _loadFiles();
+      } catch (e) {
+        if (mounted) {
+          _showError('Move failed: $e');
         }
         setState(() => _isLoading = false);
       }
@@ -213,24 +426,57 @@ class _StorageScreenState extends State<StorageScreen> {
   }
 
   Future<void> _deleteItem(StorageFile item) async {
+    print('[StorageScreen] Requested delete for: ${item.name}');
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Delete ${item.isFolder ? 'Folder' : 'File'}?'),
-        content: Text(
-          'Are you sure you want to delete "${item.name}"? ${item.isFolder ? "\nThis will delete all contents." : ""}',
+      builder: (context) => _CleanDialog(
+        title: 'Delete ${item.isFolder ? 'folder' : 'file'}?',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to delete "${item.name}"?',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.grey.shade700,
+              ),
+            ),
+            if (item.isFolder) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFEF2F2),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: const Color(0xFFFECACA)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.warning_amber_rounded,
+                      color: Color(0xFFDC2626),
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'All contents will be permanently deleted.',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: const Color(0xFFDC2626),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
-          ),
-        ],
+        primaryLabel: 'Delete',
+        primaryColor: const Color(0xFFDC2626),
+        onPrimary: () => Navigator.pop(context, true),
       ),
     );
 
@@ -243,13 +489,12 @@ class _StorageScreenState extends State<StorageScreen> {
           } else {
             await _storageService!.deleteFile(item.key);
           }
+          _showSuccess('Deleted successfully');
           await _loadFiles();
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+          _showError('Delete failed: $e');
         }
         setState(() => _isLoading = false);
       }
@@ -268,250 +513,391 @@ class _StorageScreenState extends State<StorageScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+        _showError('Download failed: $e');
       }
     }
-  }
-
-  void _navigateToFolder(String folderName) {
-    setState(() {
-      _currentPath += '$folderName/';
-      _isLoading = true;
-    });
-    _loadFiles();
-  }
-
-  void _jumpToBreadcrumb(int index) {
-    final parts = _breadcrumbs;
-    String newPath = '';
-    for (int i = 0; i <= index; i++) {
-      newPath += '${parts[i]}/';
-    }
-
-    if (newPath == _currentPath) return;
-
-    setState(() {
-      _currentPath = newPath;
-      _isLoading = true;
-    });
-    _loadFiles();
   }
 
   @override
   Widget build(BuildContext context) {
     if (_companyId == null && !_isLoading) {
-      return const Center(child: Text('No company selected'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.folder_off_outlined,
+              size: 48,
+              color: Colors.grey.shade300,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'No company selected',
+              style: GoogleFonts.inter(
+                fontSize: 14,
+                color: Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: Text(
-          'Storage',
-          style: GoogleFonts.outfit(
-            fontWeight: FontWeight.w600,
-            color: Colors.black87,
-          ),
-        ),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.black54),
-            onPressed: _loadFiles,
-            tooltip: 'Refresh',
-          ),
-          const SizedBox(width: 16),
-        ],
-      ),
+      backgroundColor: Colors.white,
       body: Stack(
         children: [
           Column(
             children: [
-              // Loading Indicator
+              _buildHeader(),
+              _buildToolbar(),
               if (_isLoading)
                 const LinearProgressIndicator(
-                  minHeight: 3,
+                  minHeight: 2,
                   backgroundColor: Colors.transparent,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF2563EB)),
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
                 ),
-
-              // Toolbar / Breadcrumbs
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(bottom: BorderSide(color: Colors.black12)),
-                ),
-                child: Row(
-                  children: [
-                    // Breadcrumbs
-                    Expanded(
-                      child: SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: [
-                            _BreadcrumbItem(
-                              text: 'Home',
-                              isLast: _breadcrumbs.isEmpty,
-                              onTap: () {
-                                if (_currentPath.isNotEmpty) {
-                                  setState(() {
-                                    _currentPath = '';
-                                    _isLoading = true;
-                                  });
-                                  _loadFiles();
-                                }
-                              },
-                            ),
-                            if (_breadcrumbs.isNotEmpty)
-                              const Icon(
-                                Icons.chevron_right,
-                                size: 16,
-                                color: Colors.black38,
-                              ),
-                            ..._breadcrumbs.asMap().entries.map((entry) {
-                              final index = entry.key;
-                              final folder = entry.value;
-                              final isLast = index == _breadcrumbs.length - 1;
-                              return Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  _BreadcrumbItem(
-                                    text: folder,
-                                    isLast: isLast,
-                                    onTap: () => _jumpToBreadcrumb(index),
-                                  ),
-                                  if (!isLast)
-                                    const Icon(
-                                      Icons.chevron_right,
-                                      size: 16,
-                                      color: Colors.black38,
-                                    ),
-                                ],
-                              );
-                            }),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    // Actions
-                    ElevatedButton.icon(
-                      onPressed: _createFolder,
-                      icon: const Icon(
-                        Icons.create_new_folder_outlined,
-                        size: 18,
-                      ),
-                      label: const Text('New Folder'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: Colors.black87,
-                        elevation: 0,
-                        side: const BorderSide(color: Colors.black12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton.icon(
-                      onPressed: _uploadFile,
-                      icon: const Icon(Icons.cloud_upload_outlined, size: 18),
-                      label: const Text('Upload'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF2563EB),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Content
-              Expanded(
-                child: _files.isEmpty && !_isLoading
-                    ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.folder_open,
-                              size: 64,
-                              color: Colors.grey[300],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'This folder is empty',
-                              style: TextStyle(
-                                color: Colors.grey[500],
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
-                      )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(24),
-                        gridDelegate:
-                            const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 200,
-                              childAspectRatio: 0.85,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
-                            ),
-                        itemCount: _files.length,
-                        itemBuilder: (context, index) {
-                          final item = _files[index];
-                          return _FileCard(
-                            item: item,
-                            onTap: () {
-                              if (item.isFolder) {
-                                _navigateToFolder(item.name);
-                              } else {
-                                _downloadFile(item);
-                              }
-                            },
-                            onDelete: () => _deleteItem(item),
-                            onDownload: () => _downloadFile(item),
-                          );
-                        },
-                      ),
-              ),
+              Expanded(child: _buildContent()),
             ],
           ),
-
-          // Uploads Overlay
           if (_uploadTasks.isNotEmpty)
-            Positioned(
-              bottom: 24,
-              right: 24,
-              child: _buildUploadQueueOverlay(),
-            ),
+            Positioned(bottom: 16, right: 16, child: _buildUploadOverlay()),
         ],
       ),
     );
   }
 
-  Widget _buildUploadQueueOverlay() {
+  Widget _buildHeader() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 20, 28, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              Icons.folder_outlined,
+              color: Colors.grey.shade700,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            'Storage',
+            style: GoogleFonts.inter(
+              fontSize: 22,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade900,
+            ),
+          ),
+          const Spacer(),
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                _ViewToggle(
+                  icon: Icons.grid_view_rounded,
+                  isActive: _isGridView,
+                  onTap: () => setState(() => _isGridView = true),
+                  isFirst: true,
+                ),
+                const SizedBox(width: 4),
+                _ViewToggle(
+                  icon: Icons.view_list_rounded,
+                  isActive: !_isGridView,
+                  onTap: () => setState(() => _isGridView = false),
+                  isFirst: false,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: IconButton(
+              icon: Icon(
+                Icons.refresh_rounded,
+                size: 20,
+                color: Colors.grey.shade700,
+              ),
+              onPressed: _loadFiles,
+              tooltip: 'Refresh',
+              splashRadius: 20,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildToolbar() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAFAFA),
+        border: Border(bottom: BorderSide(color: Colors.grey.shade100)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _Breadcrumb(
+                    text: 'Home',
+                    isLast: _breadcrumbs.isEmpty,
+                    onTap: _goHome,
+                  ),
+                  ..._breadcrumbs.asMap().entries.expand((entry) {
+                    final index = entry.key;
+                    final folder = entry.value;
+                    final isLast = index == _breadcrumbs.length - 1;
+                    return [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Icon(
+                          Icons.chevron_right_rounded,
+                          size: 18,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                      _Breadcrumb(
+                        text: folder,
+                        isLast: isLast,
+                        onTap: () => _jumpToBreadcrumb(index),
+                      ),
+                    ];
+                  }),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 20),
+          OutlinedButton.icon(
+            onPressed: _createFolder,
+            icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+            label: const Text('New Folder'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.grey.shade700,
+              side: BorderSide(color: Colors.grey.shade300),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              textStyle: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            onPressed: _uploadFile,
+            icon: const Icon(Icons.upload_file, size: 18),
+            label: const Text('Upload'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF3B82F6),
+              foregroundColor: Colors.white,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              textStyle: GoogleFonts.inter(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContent() {
+    if (_files.isEmpty && !_isLoading) {
+      return _buildEmptyState();
+    }
+
+    if (_isGridView) {
+      return GridView.builder(
+        padding: const EdgeInsets.all(24),
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 180,
+          childAspectRatio: 1.0, // Make items square
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+        ),
+        itemCount: _files.length,
+        itemBuilder: (context, index) {
+          final item = _files[index];
+          return _FileGridItem(
+            item: item,
+            isSelected: _selectedItems.contains(item.key),
+            onTap: () {
+              if (item.isFolder) {
+                _navigateToFolder(item.name);
+              } else {
+                setState(() {
+                  if (_selectedItems.contains(item.key)) {
+                    _selectedItems.remove(item.key);
+                  } else {
+                    _selectedItems.add(item.key);
+                  }
+                });
+              }
+            },
+            onRename: () => _renameItem(item),
+            onMove: () => _moveItem(item),
+            onDelete: () => _deleteItem(item),
+            onDownload: () => _downloadFile(item),
+          );
+        },
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(24),
+      itemCount: _files.length,
+      separatorBuilder: (_, __) =>
+          Divider(height: 1, color: Colors.grey.shade200),
+      itemBuilder: (context, index) {
+        final item = _files[index];
+        return _FileListItem(
+          item: item,
+          isSelected: _selectedItems.contains(item.key),
+          onTap: () {
+            if (item.isFolder) {
+              _navigateToFolder(item.name);
+            } else {
+              setState(() {
+                if (_selectedItems.contains(item.key)) {
+                  _selectedItems.remove(item.key);
+                } else {
+                  _selectedItems.add(item.key);
+                }
+              });
+            }
+          },
+          onRename: () => _renameItem(item),
+          onMove: () => _moveItem(item),
+          onDelete: () => _deleteItem(item),
+          onDownload: () => _downloadFile(item),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              Icons.folder_open_outlined,
+              size: 56,
+              color: Colors.grey.shade400,
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            _currentPath.isEmpty ? 'No files yet' : 'This folder is empty',
+            style: GoogleFonts.inter(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Upload files or create folders to get started',
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.grey.shade500),
+          ),
+          const SizedBox(height: 28),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _createFolder,
+                icon: const Icon(Icons.create_new_folder_outlined, size: 18),
+                label: const Text('New Folder'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.grey.shade700,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  side: BorderSide(color: Colors.grey.shade300),
+                  textStyle: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              ElevatedButton.icon(
+                onPressed: _uploadFile,
+                icon: const Icon(Icons.upload_file, size: 18),
+                label: const Text('Upload Files'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF3B82F6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 14,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                  textStyle: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUploadOverlay() {
     return Container(
       width: 320,
-      constraints: BoxConstraints(maxHeight: _isUploadsMinimized ? 48 : 400),
+      constraints: BoxConstraints(maxHeight: _isUploadsMinimized ? 44 : 300),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withOpacity(0.08),
             blurRadius: 16,
             offset: const Offset(0, 4),
           ),
@@ -520,95 +906,99 @@ class _StorageScreenState extends State<StorageScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Header
           Material(
-            color: const Color(0xFF1E1E1E),
+            color: const Color(0xFF1F2937),
             borderRadius: BorderRadius.vertical(
-              top: const Radius.circular(8),
+              top: const Radius.circular(7),
               bottom: _isUploadsMinimized
-                  ? const Radius.circular(8)
+                  ? const Radius.circular(7)
                   : Radius.zero,
             ),
             child: InkWell(
               onTap: () =>
                   setState(() => _isUploadsMinimized = !_isUploadsMinimized),
               borderRadius: BorderRadius.vertical(
-                top: const Radius.circular(8),
+                top: const Radius.circular(7),
                 bottom: _isUploadsMinimized
-                    ? const Radius.circular(8)
+                    ? const Radius.circular(7)
                     : Radius.zero,
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+                  horizontal: 12,
+                  vertical: 10,
                 ),
                 child: Row(
                   children: [
-                    Text(
-                      'Uploads',
-                      style: GoogleFonts.outfit(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w500,
+                    const Icon(
+                      Icons.upload_file,
+                      color: Colors.white70,
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Uploads (${_uploadTasks.length})',
+                        style: GoogleFonts.inter(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
-                    const Spacer(),
                     InkWell(
                       onTap: () => setState(() => _uploadTasks.clear()),
                       child: const Icon(
                         Icons.close,
-                        color: Colors.white70,
-                        size: 20,
+                        color: Colors.white54,
+                        size: 16,
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Icon(
                       _isUploadsMinimized
                           ? Icons.keyboard_arrow_up
                           : Icons.keyboard_arrow_down,
-                      color: Colors.white70,
-                      size: 20,
+                      color: Colors.white54,
+                      size: 18,
                     ),
                   ],
                 ),
               ),
             ),
           ),
-
-          // List
           if (!_isUploadsMinimized)
             Flexible(
               child: ListView.separated(
                 shrinkWrap: true,
-                padding: const EdgeInsets.all(0),
+                padding: EdgeInsets.zero,
                 itemCount: _uploadTasks.length,
                 separatorBuilder: (_, __) =>
-                    const Divider(height: 1, color: Colors.black12),
+                    Divider(height: 1, color: Colors.grey.shade100),
                 itemBuilder: (context, index) {
                   final task = _uploadTasks[_uploadTasks.length - 1 - index];
-
-                  return Container(
+                  return Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                      horizontal: 12,
+                      vertical: 10,
                     ),
                     child: Row(
                       children: [
                         Icon(
                           _getFileIcon(task.name),
-                          size: 20,
-                          color: Colors.grey[600],
+                          size: 16,
+                          color: Colors.grey.shade500,
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             task.name,
-                            style: const TextStyle(fontSize: 13),
+                            style: GoogleFonts.inter(fontSize: 12),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 10),
                         _buildTaskStatus(task),
                       ],
                     ),
@@ -622,19 +1012,29 @@ class _StorageScreenState extends State<StorageScreen> {
   }
 
   Widget _buildTaskStatus(UploadItem task) {
-    if (task.status == UploadStatus.uploading) {
-      return const SizedBox(
-        width: 16,
-        height: 16,
-        child: CircularProgressIndicator(strokeWidth: 2),
-      );
-    } else if (task.status == UploadStatus.success) {
-      return const Icon(Icons.check_circle, color: Colors.green, size: 18);
-    } else {
-      return Tooltip(
-        message: task.errorMessage ?? 'Error',
-        child: const Icon(Icons.error, color: Colors.red, size: 18),
-      );
+    switch (task.status) {
+      case UploadStatus.uploading:
+        return const SizedBox(
+          width: 14,
+          height: 14,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Color(0xFF3B82F6),
+          ),
+        );
+      case UploadStatus.success:
+        return const Icon(
+          Icons.check_circle,
+          color: Color(0xFF059669),
+          size: 16,
+        );
+      case UploadStatus.error:
+        return Tooltip(
+          message: task.errorMessage ?? 'Error',
+          child: const Icon(Icons.error, color: Color(0xFFDC2626), size: 16),
+        );
+      default:
+        return const SizedBox.shrink();
     }
   }
 
@@ -648,59 +1048,156 @@ class _StorageScreenState extends State<StorageScreen> {
       case 'png':
       case 'gif':
       case 'webp':
-        return Icons.image;
+        return Icons.image_outlined;
       case 'doc':
       case 'docx':
-        return Icons.description;
+        return Icons.description_outlined;
       case 'xls':
       case 'xlsx':
-        return Icons.table_chart;
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow;
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-        return Icons.audio_file;
-      case 'mp4':
-      case 'mov':
-      case 'avi':
-        return Icons.video_file;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.folder_zip;
+        return Icons.table_chart_outlined;
       default:
-        return Icons.insert_drive_file;
+        return Icons.insert_drive_file_outlined;
     }
   }
 }
 
-/// Breadcrumb navigation item
-class _BreadcrumbItem extends StatelessWidget {
-  final String text;
-  final bool isLast;
+class _CleanDialog extends StatelessWidget {
+  final String title;
+  final Widget content;
+  final String primaryLabel;
+  final Color primaryColor;
+  final bool primaryEnabled;
+  final VoidCallback onPrimary;
+
+  const _CleanDialog({
+    required this.title,
+    required this.content,
+    required this.primaryLabel,
+    this.primaryColor = const Color(0xFF3B82F6),
+    this.primaryEnabled = true,
+    required this.onPrimary,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+      ), // Square corners
+      backgroundColor: Colors.white,
+      elevation: 0, // Flat design
+      insetPadding: const EdgeInsets.all(20),
+      child: Container(
+        width: 300, // Smaller width
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: GoogleFonts.inter(
+                fontSize: 15, // Slightly smaller font
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade900,
+              ),
+            ),
+            const SizedBox(height: 16),
+            content,
+            const SizedBox(height: 24), // More spacing for cleaner look
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.grey.shade500,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: const RoundedRectangleBorder(), // Square button
+                  ),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  // Use TextButton for primary action too for minimal look, or a very flat ElevatedButton
+                  onPressed: primaryEnabled ? onPrimary : null,
+                  style: TextButton.styleFrom(
+                    foregroundColor: primaryColor,
+                    disabledForegroundColor: Colors.grey.shade300,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: const RoundedRectangleBorder(), // Square button
+                    textStyle: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: Text(primaryLabel),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewToggle extends StatelessWidget {
+  final IconData icon;
+  final bool isActive;
+  final bool isFirst;
   final VoidCallback onTap;
 
-  const _BreadcrumbItem({
-    required this.text,
-    required this.isLast,
+  const _ViewToggle({
+    required this.icon,
+    required this.isActive,
+    required this.isFirst,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: isLast ? null : onTap,
-      borderRadius: BorderRadius.circular(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Text(
-          text,
-          style: GoogleFonts.inter(
-            fontWeight: isLast ? FontWeight.w600 : FontWeight.normal,
-            color: isLast ? Colors.black87 : Colors.black54,
-            fontSize: 14,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: isActive ? Colors.white : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Icon(
+            icon,
+            size: 18,
+            color: isActive ? const Color(0xFF3B82F6) : Colors.grey.shade500,
           ),
         ),
       ),
@@ -708,26 +1205,187 @@ class _BreadcrumbItem extends StatelessWidget {
   }
 }
 
-/// File card widget with hover effects
-class _FileCard extends StatefulWidget {
-  final StorageFile item;
+class _Breadcrumb extends StatelessWidget {
+  final String text;
+  final bool isLast;
   final VoidCallback onTap;
+
+  const _Breadcrumb({
+    required this.text,
+    required this.isLast,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: isLast ? null : onTap,
+        borderRadius: BorderRadius.circular(6),
+        hoverColor: Colors.grey.shade100,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (text == 'Home')
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Icon(
+                    Icons.home_rounded,
+                    size: 16,
+                    color: isLast ? Colors.grey.shade700 : Colors.grey.shade500,
+                  ),
+                ),
+              Text(
+                text,
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: isLast ? FontWeight.w600 : FontWeight.w500,
+                  color: isLast ? Colors.grey.shade900 : Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FileGridItem extends StatefulWidget {
+  final StorageFile item;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final VoidCallback onRename;
+  final VoidCallback onMove;
   final VoidCallback onDelete;
   final VoidCallback onDownload;
 
-  const _FileCard({
+  const _FileGridItem({
     required this.item,
+    required this.isSelected,
     required this.onTap,
+    required this.onRename,
+    required this.onMove,
     required this.onDelete,
     required this.onDownload,
   });
 
   @override
-  State<_FileCard> createState() => _FileCardState();
+  State<_FileGridItem> createState() => _FileGridItemState();
 }
 
-class _FileCardState extends State<_FileCard> {
+class _FileGridItemState extends State<_FileGridItem> {
   bool _isHovering = false;
+  bool _isMenuOpen = false;
+  final GlobalKey _menuKey = GlobalKey();
+
+  Color _getFileColor(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return const Color(0xFFEF4444);
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return const Color(0xFF06B6D4);
+      case 'doc':
+      case 'docx':
+        return const Color(0xFF3B82F6);
+      case 'xls':
+      case 'xlsx':
+        return const Color(0xFF10B981);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  IconData _getFileIcon(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return Icons.picture_as_pdf;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return Icons.image_outlined;
+      case 'doc':
+      case 'docx':
+        return Icons.description_outlined;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart_outlined;
+      default:
+        return Icons.insert_drive_file_outlined;
+    }
+  }
+
+  Future<void> _showMenu() async {
+    setState(() => _isMenuOpen = true);
+    try {
+      final RenderBox button =
+          _menuKey.currentContext!.findRenderObject()! as RenderBox;
+      final RenderBox overlay =
+          Navigator.of(context).overlay!.context.findRenderObject()!
+              as RenderBox;
+      final RelativeRect position = RelativeRect.fromRect(
+        Rect.fromPoints(
+          button.localToGlobal(Offset.zero, ancestor: overlay),
+          button.localToGlobal(
+            button.size.bottomRight(Offset.zero),
+            ancestor: overlay,
+          ),
+        ),
+        Offset.zero & overlay.size,
+      );
+
+      final isFolder = widget.item.isFolder;
+      final value = await showMenu<String>(
+        context: context,
+        position: position,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 8,
+        items: [
+          if (!isFolder)
+            _menuItem('download', 'Download', Icons.download_outlined),
+          _menuItem('rename', 'Rename', Icons.edit_outlined),
+          _menuItem('move', 'Move to...', Icons.drive_file_move_outlined),
+          const PopupMenuDivider(),
+          _menuItem(
+            'delete',
+            'Delete',
+            Icons.delete_outline,
+            isDestructive: true,
+          ),
+        ],
+      );
+
+      if (value != null) {
+        switch (value) {
+          case 'download':
+            widget.onDownload();
+            break;
+          case 'rename':
+            widget.onRename();
+            break;
+          case 'move':
+            widget.onMove();
+            break;
+          case 'delete':
+            widget.onDelete();
+            break;
+        }
+      }
+    } catch (e) {
+      print('Error showing menu: $e');
+    } finally {
+      if (mounted) setState(() => _isMenuOpen = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -736,102 +1394,222 @@ class _FileCardState extends State<_FileCard> {
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovering = true),
       onExit: (_) => setState(() => _isHovering = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: _isHovering
-                  ? const Color(0xFF2563EB).withOpacity(0.5)
-                  : Colors.black12,
-              width: _isHovering ? 1.5 : 1,
-            ),
-            boxShadow: _isHovering
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : [],
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        decoration: BoxDecoration(
+          color: widget.isSelected
+              ? const Color(0xFFEFF6FF)
+              : (_isHovering || _isMenuOpen)
+              ? const Color(0xFFFAFAFA)
+              : Colors.white,
+          borderRadius: BorderRadius.zero, // Square
+          border: Border.all(
+            color: widget.isSelected
+                ? const Color(0xFF3B82F6)
+                : _isHovering
+                ? Colors.grey.shade300
+                : Colors.grey.shade200,
+            width: 1, // Consistent width
           ),
-          child: Stack(
-            children: [
-              Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 16),
-                  Center(
-                    child: Icon(
-                      isFolder ? Icons.folder : _getFileIcon(widget.item.name),
-                      size: 64,
-                      color: isFolder
-                          ? const Color(0xFFFFCA28)
-                          : _getFileColor(widget.item.extension),
-                    ),
+          boxShadow: _isHovering || widget.isSelected
+              ? [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                  const Spacer(),
-                  Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Text(
-                      widget.item.name,
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.inter(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.black87,
-                      ),
-                    ),
-                  ),
-                  if (!isFolder)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12.0),
-                      child: Text(
-                        widget.item.formattedSize,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: Colors.black45,
+                ]
+              : null,
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: isFolder
+                              ? const Color(0xFFFEF3C7)
+                              : _getFileColor(
+                                  widget.item.extension,
+                                ).withOpacity(0.1),
+                          borderRadius:
+                              BorderRadius.zero, // Square internal icon
+                        ),
+                        child: Icon(
+                          isFolder
+                              ? Icons.folder_rounded
+                              : _getFileIcon(widget.item.extension),
+                          size: 32,
+                          color: isFolder
+                              ? const Color(0xFFF59E0B)
+                              : _getFileColor(widget.item.extension),
                         ),
                       ),
-                    ),
-                ],
-              ),
-              // Hover actions
-              if (_isHovering)
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Row(
-                    children: [
-                      _ActionButton(
-                        icon: Icons.download_rounded,
-                        onTap: widget.onDownload,
-                        color: Colors.blue,
+                      const SizedBox(height: 8),
+                      Text(
+                        widget.item.name,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade800,
+                        ),
                       ),
-                      const SizedBox(width: 4),
-                      _ActionButton(
-                        icon: Icons.delete_outline_rounded,
-                        onTap: widget.onDelete,
-                        color: Colors.red,
-                      ),
+                      if (!isFolder)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            widget.item.formattedSize,
+                            style: GoogleFonts.inter(
+                              fontSize: 11,
+                              color: Colors.grey.shade500,
+                            ),
+                          ),
+                        ),
+                      const Spacer(),
                     ],
                   ),
                 ),
-            ],
-          ),
+              ),
+            ),
+            if (_isHovering || widget.isSelected || _isMenuOpen)
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(6),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      key: _menuKey,
+                      icon: Icon(
+                        Icons.more_horiz,
+                        size: 16,
+                        color: Colors.grey.shade700,
+                      ),
+                      tooltip: 'More options',
+                      splashRadius: 16,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 32,
+                        minHeight: 32,
+                      ),
+                      onPressed: _showMenu,
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
   }
 
-  IconData _getFileIcon(String filename) {
-    final ext = filename.split('.').last.toLowerCase();
+  PopupMenuItem<String> _menuItem(
+    String value,
+    String label,
+    IconData icon, {
+    bool isDestructive = false,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 36,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isDestructive
+                ? const Color(0xFFDC2626)
+                : Colors.grey.shade600,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: isDestructive
+                  ? const Color(0xFFDC2626)
+                  : Colors.grey.shade800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FileListItem extends StatefulWidget {
+  final StorageFile item;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final VoidCallback onRename;
+  final VoidCallback onMove;
+  final VoidCallback onDelete;
+  final VoidCallback onDownload;
+
+  const _FileListItem({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+    required this.onRename,
+    required this.onMove,
+    required this.onDelete,
+    required this.onDownload,
+  });
+
+  @override
+  State<_FileListItem> createState() => _FileListItemState();
+}
+
+class _FileListItemState extends State<_FileListItem> {
+  bool _isHovering = false;
+  bool _isMenuOpen = false;
+  final GlobalKey _menuKey = GlobalKey();
+
+  Color _getFileColor(String ext) {
+    switch (ext) {
+      case 'pdf':
+        return const Color(0xFFEF4444);
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+        return const Color(0xFF06B6D4);
+      case 'doc':
+      case 'docx':
+        return const Color(0xFF3B82F6);
+      case 'xls':
+      case 'xlsx':
+        return const Color(0xFF10B981);
+      default:
+        return const Color(0xFF6B7280);
+    }
+  }
+
+  IconData _getFileIcon(String ext) {
     switch (ext) {
       case 'pdf':
         return Icons.picture_as_pdf;
@@ -840,98 +1618,225 @@ class _FileCardState extends State<_FileCard> {
       case 'png':
       case 'gif':
       case 'webp':
-        return Icons.image;
+        return Icons.image_outlined;
       case 'doc':
       case 'docx':
-        return Icons.description;
+        return Icons.description_outlined;
       case 'xls':
       case 'xlsx':
-        return Icons.table_chart;
-      case 'ppt':
-      case 'pptx':
-        return Icons.slideshow;
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-        return Icons.audio_file;
-      case 'mp4':
-      case 'mov':
-      case 'avi':
-        return Icons.video_file;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Icons.folder_zip;
+        return Icons.table_chart_outlined;
       default:
-        return Icons.insert_drive_file;
+        return Icons.insert_drive_file_outlined;
     }
   }
 
-  Color _getFileColor(String ext) {
-    switch (ext) {
-      case 'pdf':
-        return Colors.red;
-      case 'jpg':
-      case 'jpeg':
-      case 'png':
-      case 'gif':
-      case 'webp':
-        return Colors.teal;
-      case 'doc':
-      case 'docx':
-        return Colors.blue;
-      case 'xls':
-      case 'xlsx':
-        return Colors.green;
-      case 'ppt':
-      case 'pptx':
-        return Colors.orange;
-      case 'mp3':
-      case 'wav':
-      case 'aac':
-        return Colors.purple;
-      case 'mp4':
-      case 'mov':
-      case 'avi':
-        return Colors.pink;
-      case 'zip':
-      case 'rar':
-      case '7z':
-        return Colors.amber;
-      default:
-        return Colors.grey;
+  Future<void> _showMenu() async {
+    setState(() => _isMenuOpen = true);
+    try {
+      final RenderBox button =
+          _menuKey.currentContext!.findRenderObject()! as RenderBox;
+      final RenderBox overlay =
+          Navigator.of(context).overlay!.context.findRenderObject()!
+              as RenderBox;
+      final RelativeRect position = RelativeRect.fromRect(
+        Rect.fromPoints(
+          button.localToGlobal(Offset.zero, ancestor: overlay),
+          button.localToGlobal(
+            button.size.bottomRight(Offset.zero),
+            ancestor: overlay,
+          ),
+        ),
+        Offset.zero & overlay.size,
+      );
+
+      final isFolder = widget.item.isFolder;
+      final value = await showMenu<String>(
+        context: context,
+        position: position,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        elevation: 8,
+        items: [
+          if (!isFolder)
+            _menuItem('download', 'Download', Icons.download_outlined),
+          _menuItem('rename', 'Rename', Icons.edit_outlined),
+          _menuItem('move', 'Move to...', Icons.drive_file_move_outlined),
+          const PopupMenuDivider(),
+          _menuItem(
+            'delete',
+            'Delete',
+            Icons.delete_outline,
+            isDestructive: true,
+          ),
+        ],
+      );
+
+      if (value != null) {
+        switch (value) {
+          case 'download':
+            widget.onDownload();
+            break;
+          case 'rename':
+            widget.onRename();
+            break;
+          case 'move':
+            widget.onMove();
+            break;
+          case 'delete':
+            widget.onDelete();
+            break;
+        }
+      }
+    } catch (e) {
+      print('Error showing menu: $e');
+    } finally {
+      if (mounted) setState(() => _isMenuOpen = false);
     }
   }
-}
-
-/// Small action button for file cards
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  final Color color;
-
-  const _ActionButton({
-    required this.icon,
-    required this.onTap,
-    required this.color,
-  });
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: Colors.black12),
+    final isFolder = widget.item.isFolder;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: widget.isSelected
+              ? const Color(0xFFEFF6FF)
+              : (_isHovering || _isMenuOpen)
+              ? const Color(0xFFFAFAFA)
+              : Colors.white,
+          borderRadius: BorderRadius.zero, // Square list item
+          border: Border.all(
+            color: widget.isSelected
+                ? const Color(0xFF3B82F6)
+                : _isHovering
+                ? Colors.grey.shade200
+                : Colors.transparent,
+            width: 1, // Consistent width
           ),
-          child: Icon(icon, size: 16, color: color),
         ),
+        child: Row(
+          children: [
+            // Content handling tap
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.onTap,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: isFolder
+                            ? const Color(0xFFFEF3C7)
+                            : _getFileColor(
+                                widget.item.extension,
+                              ).withOpacity(0.1),
+                        borderRadius:
+                            BorderRadius.zero, // Square internal icon list
+                      ),
+                      child: Icon(
+                        isFolder
+                            ? Icons.folder_rounded
+                            : _getFileIcon(widget.item.extension),
+                        size: 20,
+                        color: isFolder
+                            ? const Color(0xFFF59E0B)
+                            : _getFileColor(widget.item.extension),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        widget.item.name,
+                        style: GoogleFonts.inter(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey.shade800,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (!isFolder)
+                      Text(
+                        widget.item.formattedSize,
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            // Actions (independent)
+            const SizedBox(width: 8),
+            if (!isFolder)
+              IconButton(
+                icon: Icon(
+                  Icons.download_outlined,
+                  size: 16,
+                  color: Colors.grey.shade500,
+                ),
+                onPressed: widget.onDownload,
+                splashRadius: 16,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              ),
+            IconButton(
+              key: _menuKey,
+              tooltip: 'More options',
+              icon: Icon(
+                Icons.more_horiz,
+                size: 18,
+                color: Colors.grey.shade600,
+              ),
+              iconSize: 18,
+              splashRadius: 18,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: _showMenu,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String> _menuItem(
+    String value,
+    String label,
+    IconData icon, {
+    bool isDestructive = false,
+  }) {
+    return PopupMenuItem<String>(
+      value: value,
+      height: 36,
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isDestructive
+                ? const Color(0xFFDC2626)
+                : Colors.grey.shade600,
+          ),
+          const SizedBox(width: 10),
+          Text(
+            label,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: isDestructive
+                  ? const Color(0xFFDC2626)
+                  : Colors.grey.shade800,
+            ),
+          ),
+        ],
       ),
     );
   }

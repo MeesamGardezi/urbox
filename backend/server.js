@@ -265,6 +265,9 @@ async function startServer() {
         console.log('   DELETE /api/storage/delete/*');
         console.log('   POST /api/storage/folder');
         console.log('   DELETE /api/storage/folder/*');
+        console.log('   POST /api/storage/rename');
+        console.log('   POST /api/storage/move');
+        console.log('   GET  /api/storage/folders');
         console.log('   GET  /api/storage/presigned/upload');
         console.log('   GET  /api/storage/presigned/download/*');
         console.log('\n==========================================================\n');

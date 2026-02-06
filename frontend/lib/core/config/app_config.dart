@@ -107,6 +107,15 @@ class AppConfig {
   static String storagePresignedDownloadEndpoint(String key) =>
       '$storageEndpoint/presigned/download/$key';
 
+  /// Rename file/folder endpoint
+  static String get storageRenameEndpoint => '$storageEndpoint/rename';
+
+  /// Move file/folder endpoint
+  static String get storageMoveEndpoint => '$storageEndpoint/move';
+
+  /// List all folders endpoint (for move dialog)
+  static String get storageFoldersEndpoint => '$storageEndpoint/folders';
+
   // ============================================================================
   // APP SETTINGS
   // ============================================================================

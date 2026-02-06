@@ -11,6 +11,7 @@ const {
     DeleteObjectCommand,
     ListObjectsV2Command,
     PutObjectCommand,
+    CopyObjectCommand,
 } = require("@aws-sdk/client-s3");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { Upload } = require("@aws-sdk/lib-storage");
@@ -326,6 +327,217 @@ class StorageService {
             };
         } catch (error) {
             console.error("[Storage] Presigned download error:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * renameFile
+     * Renames a file by copying to new key and deleting old key
+     * For folders, recursively renames all contents
+     */
+    async renameFile(oldKey, newName) {
+        try {
+            const isFolder = oldKey.endsWith('/');
+
+            // Extract parent path
+            const parts = oldKey.split('/');
+            if (isFolder) {
+                parts.pop(); // Remove empty string after trailing slash
+            }
+            parts.pop(); // Remove old name
+            const parentPath = parts.length > 0 ? parts.join('/') + '/' : '';
+
+            const newKey = isFolder
+                ? `${parentPath}${newName}/`
+                : `${parentPath}${newName}`;
+
+            if (isFolder) {
+                // For folders, we need to copy all contents
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    Prefix: oldKey,
+                });
+
+                const listResponse = await this.s3Client.send(listCommand);
+                const objects = listResponse.Contents || [];
+
+                // Copy all objects to new location
+                for (const obj of objects) {
+                    const newObjKey = obj.Key.replace(oldKey, newKey);
+                    await this.s3Client.send(new CopyObjectCommand({
+                        Bucket: this.bucketName,
+                        CopySource: `${this.bucketName}/${obj.Key}`,
+                        Key: newObjKey,
+                    }));
+                }
+
+                // Delete all old objects
+                for (const obj of objects) {
+                    await this.s3Client.send(new DeleteObjectCommand({
+                        Bucket: this.bucketName,
+                        Key: obj.Key,
+                    }));
+                }
+
+                console.log(`[Storage] Folder renamed: ${oldKey} -> ${newKey}`);
+            } else {
+                // For single files, copy and delete
+                await this.s3Client.send(new CopyObjectCommand({
+                    Bucket: this.bucketName,
+                    CopySource: `${this.bucketName}/${oldKey}`,
+                    Key: newKey,
+                }));
+
+                await this.s3Client.send(new DeleteObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: oldKey,
+                }));
+
+                console.log(`[Storage] File renamed: ${oldKey} -> ${newKey}`);
+            }
+
+            return {
+                success: true,
+                message: isFolder ? "Folder renamed successfully" : "File renamed successfully",
+                oldKey: oldKey,
+                newKey: newKey,
+            };
+        } catch (error) {
+            console.error("[Storage] Rename error:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * moveFile
+     * Moves a file or folder to a new destination
+     */
+    async moveFile(sourceKey, destinationFolder) {
+        try {
+            const isFolder = sourceKey.endsWith('/');
+
+            // Extract file/folder name
+            const parts = sourceKey.split('/');
+            if (isFolder) {
+                parts.pop(); // Remove empty string after trailing slash
+            }
+            const name = parts.pop();
+
+            // Construct destination key
+            const destFolder = destinationFolder.endsWith('/')
+                ? destinationFolder
+                : destinationFolder + '/';
+            const destKey = isFolder
+                ? `${destFolder}${name}/`
+                : `${destFolder}${name}`;
+
+            // Check if source and destination are the same
+            if (sourceKey === destKey) {
+                console.log(`[Storage] Source and destination are the same: ${sourceKey}`);
+                return {
+                    success: true,
+                    message: "Source and destination are the same",
+                    sourceKey: sourceKey,
+                    destinationKey: destKey,
+                };
+            }
+
+            if (isFolder) {
+                // For folders, move all contents
+                const listCommand = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    Prefix: sourceKey,
+                });
+
+                const listResponse = await this.s3Client.send(listCommand);
+                const objects = listResponse.Contents || [];
+
+                for (const obj of objects) {
+                    const newObjKey = obj.Key.replace(sourceKey, destKey);
+                    await this.s3Client.send(new CopyObjectCommand({
+                        Bucket: this.bucketName,
+                        CopySource: `${this.bucketName}/${obj.Key}`,
+                        Key: newObjKey,
+                    }));
+                }
+
+                // Delete all old objects
+                for (const obj of objects) {
+                    await this.s3Client.send(new DeleteObjectCommand({
+                        Bucket: this.bucketName,
+                        Key: obj.Key,
+                    }));
+                }
+
+                console.log(`[Storage] Folder moved: ${sourceKey} -> ${destKey}`);
+            } else {
+                // For single files
+                await this.s3Client.send(new CopyObjectCommand({
+                    Bucket: this.bucketName,
+                    CopySource: `${this.bucketName}/${sourceKey}`,
+                    Key: destKey,
+                }));
+
+                await this.s3Client.send(new DeleteObjectCommand({
+                    Bucket: this.bucketName,
+                    Key: sourceKey,
+                }));
+
+                console.log(`[Storage] File moved: ${sourceKey} -> ${destKey}`);
+            }
+
+            return {
+                success: true,
+                message: isFolder ? "Folder moved successfully" : "File moved successfully",
+                sourceKey: sourceKey,
+                destinationKey: destKey,
+            };
+        } catch (error) {
+            console.error("[Storage] Move error:", error);
+            throw error;
+        }
+    }
+
+    /**
+     * getFolders
+     * Lists all folders (for move dialog destination selection)
+     */
+    async getFolders(prefix = "") {
+        try {
+            const folders = [];
+            let continuationToken = null;
+
+            do {
+                const command = new ListObjectsV2Command({
+                    Bucket: this.bucketName,
+                    Prefix: prefix,
+                    Delimiter: "/",
+                    ContinuationToken: continuationToken,
+                });
+
+                const response = await this.s3Client.send(command);
+
+                // Add folders from CommonPrefixes
+                if (response.CommonPrefixes) {
+                    for (const item of response.CommonPrefixes) {
+                        folders.push({
+                            key: item.Prefix,
+                            name: item.Prefix.split('/').filter(Boolean).pop(),
+                        });
+
+                        // Recursively get subfolders
+                        const subFolders = await this.getFolders(item.Prefix);
+                        folders.push(...subFolders);
+                    }
+                }
+
+                continuationToken = response.NextContinuationToken;
+            } while (continuationToken);
+
+            return folders;
+        } catch (error) {
+            console.error("[Storage] Get folders error:", error);
             throw error;
         }
     }

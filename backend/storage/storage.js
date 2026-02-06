@@ -351,6 +351,128 @@ function createStorageRoutes(storageService, db) {
         }
     });
 
+    /**
+     * POST /rename
+     * Rename a file or folder
+     * 
+     * Body:
+     *   - key: Current file/folder key
+     *   - newName: New name for the file/folder
+     */
+    router.post('/rename', async (req, res) => {
+        try {
+            const { key, newName } = req.body;
+
+            if (!key || !newName) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Both 'key' and 'newName' are required"
+                });
+            }
+
+            // Validate new name (no slashes, not empty)
+            if (newName.includes('/') || newName.trim() === '') {
+                return res.status(400).json({
+                    success: false,
+                    error: "Invalid new name. Name cannot contain slashes or be empty."
+                });
+            }
+
+            const absoluteKey = req.toAbsoluteKey(key);
+            const result = await storageService.renameFile(absoluteKey, newName);
+
+            // Convert keys back to relative
+            result.oldKey = req.toRelativeKey(result.oldKey);
+            result.newKey = req.toRelativeKey(result.newKey);
+
+            res.json(result);
+        } catch (err) {
+            console.error('[Storage] Rename route error:', err);
+            res.status(500).json({
+                success: false,
+                error: err.message
+            });
+        }
+    });
+
+    /**
+     * POST /move
+     * Move a file or folder to a new location
+     * 
+     * Body:
+     *   - key: Current file/folder key
+     *   - destination: Destination folder path
+     */
+    router.post('/move', async (req, res) => {
+        try {
+            const { key, destination } = req.body;
+
+            if (!key) {
+                return res.status(400).json({
+                    success: false,
+                    error: "'key' is required"
+                });
+            }
+
+            // destination can be empty (move to root)
+            const absoluteKey = req.toAbsoluteKey(key);
+            const absoluteDestination = destination
+                ? req.toAbsoluteKey(destination)
+                : req.companyPrefix;
+
+            const result = await storageService.moveFile(absoluteKey, absoluteDestination);
+
+            // Convert keys back to relative
+            result.sourceKey = req.toRelativeKey(result.sourceKey);
+            result.destinationKey = req.toRelativeKey(result.destinationKey);
+
+            res.json(result);
+        } catch (err) {
+            console.error('[Storage] Move route error:', err);
+            res.status(500).json({
+                success: false,
+                error: err.message
+            });
+        }
+    });
+
+    /**
+     * GET /folders
+     * List all folders (for move dialog)
+     * 
+     * Query params:
+     *   - prefix: Optional prefix to start from
+     */
+    router.get('/folders', async (req, res) => {
+        try {
+            const absolutePrefix = req.companyPrefix;
+            const folders = await storageService.getFolders(absolutePrefix);
+
+            // Convert to relative paths and add root
+            const relativeFolders = folders.map(f => ({
+                ...f,
+                key: req.toRelativeKey(f.key),
+            })).filter(f => f.key !== '' && f.key !== '/');
+
+            // Add root option
+            relativeFolders.unshift({
+                key: '',
+                name: 'Root',
+            });
+
+            res.json({
+                success: true,
+                folders: relativeFolders,
+            });
+        } catch (err) {
+            console.error('[Storage] Folders route error:', err);
+            res.status(500).json({
+                success: false,
+                error: err.message
+            });
+        }
+    });
+
     return router;
 }
 
