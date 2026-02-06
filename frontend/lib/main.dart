@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 
 import 'firebase_options.dart';
 import 'core/routing/app_router.dart';
@@ -9,6 +10,7 @@ import 'core/services/theme_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
 
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -45,40 +47,16 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // Show loading screen while checking auth state
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return ValueListenableBuilder<ThemeMode>(
-            valueListenable: ThemeService().themeMode,
-            builder: (context, themeMode, _) {
-              return MaterialApp(
-                debugShowCheckedModeBanner: false,
-                theme: AppTheme.lightTheme,
-                darkTheme: AppTheme.darkTheme,
-                themeMode: themeMode,
-                home: const Scaffold(
-                  body: Center(child: CircularProgressIndicator()),
-                ),
-              );
-            },
-          );
-        }
-
-        // Build app with router
-        return ValueListenableBuilder<ThemeMode>(
-          valueListenable: ThemeService().themeMode,
-          builder: (context, themeMode, _) {
-            return MaterialApp.router(
-              title: 'Shared Mailbox',
-              debugShowCheckedModeBanner: false,
-              theme: AppTheme.lightTheme,
-              darkTheme: AppTheme.darkTheme,
-              themeMode: themeMode,
-              routerConfig: AppRouter.router,
-            );
-          },
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeService().themeMode,
+      builder: (context, themeMode, _) {
+        return MaterialApp.router(
+          title: 'Shared Mailbox',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: themeMode,
+          routerConfig: AppRouter.router,
         );
       },
     );

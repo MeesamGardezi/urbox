@@ -56,7 +56,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadData() async {
     if (user == null) {
-      if (mounted) context.go('/auth');
       return;
     }
 

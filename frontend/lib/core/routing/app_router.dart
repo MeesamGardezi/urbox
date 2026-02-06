@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'go_router_refresh_stream.dart';
 import '../../auth/screens/auth_screen.dart';
 import '../screens/dashboard_screen.dart';
 import '../screens/plans_screen.dart';
@@ -20,21 +21,49 @@ class AppRouter {
   static final GoRouter router = GoRouter(
     navigatorKey: _rootNavigatorKey,
     initialLocation: '/auth',
-    debugLogDiagnostics: false,
+    debugLogDiagnostics: true,
+    refreshListenable: GoRouterRefreshStream(
+      FirebaseAuth.instance.authStateChanges(),
+    ),
     redirect: (context, state) {
       final user = FirebaseAuth.instance.currentUser;
       final isLoggedIn = user != null;
-      final isOnAuthPage = state.matchedLocation.startsWith('/auth');
+      final isAuthRoute = state.matchedLocation.startsWith('/auth');
 
-      if (!isLoggedIn && !isOnAuthPage) {
-        return '/auth';
+      // Debug redirect logic (helps verify behavior)
+      debugPrint(
+        '[Router] Redirect check: path=${state.uri}, loggedIn=$isLoggedIn, authRoute=$isAuthRoute',
+      );
+
+      // 1. If not logged in and trying to access protected route -> Redirect to Auth
+      if (!isLoggedIn) {
+        if (isAuthRoute) return null; // Already on auth page
+
+        final fromLocation = state.uri.toString();
+        debugPrint(
+          '[Router] Not logged in. Redirecting to auth with return url: $fromLocation',
+        );
+        return '/auth?redirect=${Uri.encodeComponent(fromLocation)}';
       }
 
-      if (isLoggedIn && isOnAuthPage) {
+      // 2. If logged in and on auth page -> Redirect to intended destination or dashboard
+      if (isLoggedIn && isAuthRoute) {
+        final redirect = state.uri.queryParameters['redirect'];
+
+        if (redirect != null && redirect.isNotEmpty) {
+          debugPrint(
+            '[Router] Logged in on auth page. Redirecting to: $redirect',
+          );
+          return redirect;
+        }
+
+        debugPrint(
+          '[Router] Logged in on auth page. Redirecting to /dashboard',
+        );
         return '/dashboard';
       }
 
-      return null;
+      return null; // No redirect needed
     },
     routes: [
       // Authentication Route (outside shell)
@@ -43,7 +72,8 @@ class AppRouter {
         name: 'auth',
         builder: (context, state) {
           final inviteToken = state.uri.queryParameters['invite'];
-          return AuthScreen(inviteToken: inviteToken);
+          final redirectUrl = state.uri.queryParameters['redirect'];
+          return AuthScreen(inviteToken: inviteToken, redirectUrl: redirectUrl);
         },
       ),
 

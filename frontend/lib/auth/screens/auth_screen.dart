@@ -10,8 +10,9 @@ import '../../core/theme/app_theme.dart';
 /// Handles login, signup, and invite acceptance in one place
 class AuthScreen extends StatefulWidget {
   final String? inviteToken;
+  final String? redirectUrl;
 
-  const AuthScreen({super.key, this.inviteToken});
+  const AuthScreen({super.key, this.inviteToken, this.redirectUrl});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -195,7 +196,11 @@ class _AuthScreenState extends State<AuthScreen>
       );
 
       if (mounted) {
-        context.go('/dashboard');
+        if (widget.redirectUrl != null) {
+          context.go(widget.redirectUrl!);
+        } else {
+          context.go('/dashboard');
+        }
       }
     } on FirebaseAuthException catch (e) {
       setState(() {
@@ -223,7 +228,11 @@ class _AuthScreenState extends State<AuthScreen>
         );
 
         if (mounted) {
-          context.go('/dashboard');
+          if (widget.redirectUrl != null) {
+            context.go(widget.redirectUrl!);
+          } else {
+            context.go('/dashboard');
+          }
         }
       } else {
         setState(() {
@@ -257,7 +266,11 @@ class _AuthScreenState extends State<AuthScreen>
               backgroundColor: AppTheme.success,
             ),
           );
-          context.go('/dashboard');
+          if (widget.redirectUrl != null) {
+            context.go(widget.redirectUrl!);
+          } else {
+            context.go('/dashboard');
+          }
         }
       } else {
         setState(() {
