@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../core/config/app_config.dart';
 import '../../core/models/team_member.dart';
+import '../services/team_member_service.dart';
 
 /// Team management screen for company owners
 /// Allows inviting team members and managing them

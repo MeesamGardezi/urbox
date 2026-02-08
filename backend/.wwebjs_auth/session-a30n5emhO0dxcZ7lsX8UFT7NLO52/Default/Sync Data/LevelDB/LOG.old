@@ -1,3 +1,3 @@
-2026/02/08-11:53:40.789 c336 Reusing MANIFEST /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/Sync Data/LevelDB/MANIFEST-000001
-2026/02/08-11:53:40.798 c336 Recovering log #3
-2026/02/08-11:53:40.799 c336 Reusing old log /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/Sync Data/LevelDB/000003.log 
+2026/02/08-23:40:23.410 40796 Reusing MANIFEST /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/Sync Data/LevelDB/MANIFEST-000001
+2026/02/08-23:40:23.422 40796 Recovering log #3
+2026/02/08-23:40:23.422 40796 Reusing old log /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/Sync Data/LevelDB/000003.log 

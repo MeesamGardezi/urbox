@@ -10,6 +10,9 @@ import '../screens/settings_screen.dart';
 import '../../whatsapp/screens/whatsapp_screen.dart';
 import '../../storage/screens/storage_screen.dart';
 import '../../team/screens/team_screen.dart';
+import '../../email/screens/accounts_screen.dart';
+import '../../slack/screens/slack_screen.dart';
+import '../../inbox/screens/inbox_screen.dart';
 
 /// App Router Configuration
 ///
@@ -96,126 +99,23 @@ class AppRouter {
           return DashboardScreen(child: child);
         },
         routes: [
-          GoRoute(path: '/', redirect: (context, state) => '/dashboard'),
+          GoRoute(path: '/', redirect: (context, state) => '/inbox'),
+          GoRoute(path: '/dashboard', redirect: (context, state) => '/inbox'),
 
-          // Dashboard home (shows default dashboard content)
-          GoRoute(
-            path: '/dashboard',
-            name: 'dashboard',
-            pageBuilder: (context, state) => const NoTransitionPage(
-              child: SizedBox.shrink(), // Dashboard renders its own content
-            ),
-          ),
-
-          // Inbox
+          // Inbox (Default Home)
           GoRoute(
             path: '/inbox',
             name: 'inbox',
-            pageBuilder: (context, state) => NoTransitionPage(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.inbox_outlined,
-                        size: 64,
-                        color: Theme.of(
-                          context,
-                        ).iconTheme.color?.withOpacity(0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Inbox',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Coming Soon',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
-          // Sent
-          GoRoute(
-            path: '/sent',
-            name: 'sent',
-            pageBuilder: (context, state) => NoTransitionPage(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.send_outlined,
-                        size: 64,
-                        color: Theme.of(
-                          context,
-                        ).iconTheme.color?.withOpacity(0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Sent',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Coming Soon',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: InboxScreen()),
           ),
 
           // Email Accounts
           GoRoute(
             path: '/accounts',
             name: 'accounts',
-            pageBuilder: (context, state) => NoTransitionPage(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.email_outlined,
-                        size: 64,
-                        color: Theme.of(
-                          context,
-                        ).iconTheme.color?.withOpacity(0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Email Accounts',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Coming Soon',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AccountsScreen()),
           ),
 
           // Custom Inboxes
@@ -277,6 +177,14 @@ class AppRouter {
             name: 'settings',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: SettingsScreen()),
+          ),
+
+          // Slack Integration
+          GoRoute(
+            path: '/slack',
+            name: 'slack',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: SlackScreen()),
           ),
 
           // WhatsApp Integration

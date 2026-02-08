@@ -7,7 +7,7 @@ class AppConfig {
   // ============================================================================
 
   /// Base URL for the backend API
-  static const String apiBaseUrl = 'http://localhost:3004';
+  static const String apiBaseUrl = 'http://localhost:3000';
 
   /// API Endpoints
   static const String authEndpoint = '$apiBaseUrl/api/auth';
@@ -15,6 +15,32 @@ class AppConfig {
   static const String subscriptionEndpoint = '$apiBaseUrl/api/subscription';
   static const String paymentEndpoint = '$apiBaseUrl/api/payment';
   static const String whatsappEndpoint = '$apiBaseUrl/api/whatsapp';
+
+  /// Email API Endpoints
+  static const String emailEndpoint = '$apiBaseUrl/api/email';
+
+  /// Google OAuth URL
+  static String googleAuthUrl(String companyId, String userId) =>
+      '$emailEndpoint/auth/google?companyId=$companyId&userId=$userId';
+
+  /// Microsoft OAuth URL
+  static String microsoftAuthUrl(String companyId, String userId) =>
+      '$emailEndpoint/auth/microsoft?companyId=$companyId&userId=$userId';
+
+  /// IMAP Add Account endpoint
+  static String get imapAddEndpoint => '$emailEndpoint/imap/add';
+
+  /// IMAP Test Connection endpoint
+  static String get imapTestEndpoint => '$emailEndpoint/imap/test';
+
+  static String get slackEndpoint => '$apiBaseUrl/api/slack';
+  static String get slackAccountsEndpoint => '$slackEndpoint/accounts';
+
+  static String slackAuthUrl(String companyId, String userId) =>
+      '$slackEndpoint/auth?companyId=$companyId&userId=$userId';
+
+  /// List/Delete Accounts endpoint
+  static String get emailAccountsEndpoint => '$emailEndpoint/accounts';
 
   // ============================================================================
   // WHATSAPP API ENDPOINTS

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter_widget_from_html/flutter_widget_from_html.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'folder_tree_selector.dart';
 import '../models/storage_model.dart';
@@ -34,6 +35,9 @@ class _StorageScreenState extends State<StorageScreen> {
 
   // View mode
   bool _isGridView = false; // Default to list view
+  StorageFile? _previewFile;
+  bool _isLoadingPreview = false;
+  String? _previewUrl;
 
   /// Breadcrumb navigation parts
   List<String> get _breadcrumbs {
@@ -140,6 +144,8 @@ class _StorageScreenState extends State<StorageScreen> {
     setState(() {
       _currentPath += '$folderName/';
       _isLoading = true;
+      _previewFile = null;
+      _previewUrl = null;
     });
     _loadFiles();
   }
@@ -156,6 +162,8 @@ class _StorageScreenState extends State<StorageScreen> {
     setState(() {
       _currentPath = newPath;
       _isLoading = true;
+      _previewFile = null;
+      _previewUrl = null;
     });
     _loadFiles();
   }
@@ -165,6 +173,8 @@ class _StorageScreenState extends State<StorageScreen> {
     setState(() {
       _currentPath = '';
       _isLoading = true;
+      _previewFile = null;
+      _previewUrl = null;
     });
     _loadFiles();
   }
@@ -518,6 +528,296 @@ class _StorageScreenState extends State<StorageScreen> {
     }
   }
 
+  Future<void> _onFileSelected(StorageFile item) async {
+    if (item.isFolder) {
+      _navigateToFolder(item.name);
+      return;
+    }
+
+    setState(() {
+      _previewFile = item;
+      _isLoadingPreview = true;
+      _previewUrl = null;
+    });
+
+    if (_storageService != null) {
+      try {
+        final url = await _storageService!.getDownloadUrl(item.key);
+        if (mounted) {
+          setState(() {
+            _previewUrl = url;
+            _isLoadingPreview = false;
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoadingPreview = false;
+          });
+          // _showError('Failed to load preview');
+        }
+      }
+    }
+  }
+
+  void _closePreview() {
+    setState(() {
+      _previewFile = null;
+      _previewUrl = null;
+    });
+  }
+
+  Widget _buildPreviewSidebar() {
+    if (_previewFile == null) return const SizedBox.shrink();
+
+    return Container(
+      // width: 350, // Removed fixed width
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(left: BorderSide(color: Colors.grey.shade200)),
+      ),
+      child: Column(
+        children: [
+          // Header
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _previewFile!.name,
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade900,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: _closePreview,
+                  color: Colors.grey.shade500,
+                  splashRadius: 20,
+                  tooltip: 'Close details',
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Preview Area
+          Expanded(
+            child: _isLoadingPreview
+                ? const Center(child: CircularProgressIndicator())
+                : _previewUrl == null
+                ? const Center(child: Text('Preview not available'))
+                : _buildFilePreview(_previewFile!, _previewUrl!),
+          ),
+
+          const Divider(height: 1),
+
+          // Details
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Details',
+                  style: GoogleFonts.inter(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.grey.shade900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _detailRow('Type', _previewFile!.extension.toUpperCase()),
+                const SizedBox(height: 8),
+                _detailRow('Size', _previewFile!.formattedSize),
+                const SizedBox(height: 8),
+                _detailRow(
+                  'Modified',
+                  _previewFile!.lastModified.toString().split('.')[0],
+                ),
+              ],
+            ),
+          ),
+
+          // Actions
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Column(
+              children: [
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: () => _downloadFile(_previewFile!),
+                    icon: const Icon(Icons.download_outlined, size: 18),
+                    label: const Text('Download'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey.shade700,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          // TODO: Rename
+                          _renameItem(_previewFile!);
+                        },
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        label: const Text('Rename'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.grey.shade700,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          _deleteItem(_previewFile!);
+                          _closePreview();
+                        },
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: Color(0xFFDC2626),
+                        ),
+                        label: const Text(
+                          'Delete',
+                          style: TextStyle(color: Color(0xFFDC2626)),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFDC2626),
+                          alignment: Alignment.centerLeft,
+                          side: BorderSide(
+                            color: const Color(0xFFDC2626).withOpacity(0.3),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 16,
+                            horizontal: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilePreview(StorageFile file, String url) {
+    final ext = file.extension;
+
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext)) {
+      return Container(
+        color: const Color(0xFFF9FAFB),
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return const CircularProgressIndicator();
+            },
+            errorBuilder: (context, error, stackTrace) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.broken_image_rounded,
+                  size: 48,
+                  color: Colors.grey,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Could not load image',
+                  style: TextStyle(color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else if (ext == 'pdf') {
+      return HtmlWidget(
+        '<iframe src="$url" style="width:100%; height:100%; border:none;"></iframe>',
+      );
+    } else if (['doc', 'docx'].contains(ext)) {
+      final gdocUrl =
+          'https://docs.google.com/gview?embedded=true&url=${Uri.encodeComponent(url)}';
+      return HtmlWidget(
+        '<iframe src="$gdocUrl" style="width:100%; height:100%; border:none;"></iframe>',
+      );
+    }
+
+    return Container(
+      color: const Color(0xFFF9FAFB),
+      width: double.infinity,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(_getFileIcon(ext), size: 64, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            'Preview not available',
+            style: GoogleFonts.inter(fontSize: 14, color: Colors.grey.shade500),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: () => _downloadFile(file),
+            child: const Text('Download to view'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(String label, String value) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(
+            label,
+            style: GoogleFonts.inter(fontSize: 13, color: Colors.grey.shade500),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: GoogleFonts.inter(
+              fontSize: 13,
+              color: Colors.grey.shade800,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_companyId == null && !_isLoading) {
@@ -557,7 +857,19 @@ class _StorageScreenState extends State<StorageScreen> {
                   backgroundColor: Colors.transparent,
                   valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF3B82F6)),
                 ),
-              Expanded(child: _buildContent()),
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      flex: _previewFile != null ? 1 : 10,
+                      child: _buildContent(),
+                    ),
+                    if (_previewFile != null)
+                      Expanded(flex: 1, child: _buildPreviewSidebar()),
+                  ],
+                ),
+              ),
             ],
           ),
           if (_uploadTasks.isNotEmpty)
@@ -748,20 +1060,9 @@ class _StorageScreenState extends State<StorageScreen> {
           final item = _files[index];
           return _FileGridItem(
             item: item,
-            isSelected: _selectedItems.contains(item.key),
-            onTap: () {
-              if (item.isFolder) {
-                _navigateToFolder(item.name);
-              } else {
-                setState(() {
-                  if (_selectedItems.contains(item.key)) {
-                    _selectedItems.remove(item.key);
-                  } else {
-                    _selectedItems.add(item.key);
-                  }
-                });
-              }
-            },
+            isSelected: _previewFile?.key == item.key,
+            onTap: () => _onFileSelected(item),
+            onView: () => _onFileSelected(item),
             onRename: () => _renameItem(item),
             onMove: () => _moveItem(item),
             onDelete: () => _deleteItem(item),
@@ -780,20 +1081,9 @@ class _StorageScreenState extends State<StorageScreen> {
         final item = _files[index];
         return _FileListItem(
           item: item,
-          isSelected: _selectedItems.contains(item.key),
-          onTap: () {
-            if (item.isFolder) {
-              _navigateToFolder(item.name);
-            } else {
-              setState(() {
-                if (_selectedItems.contains(item.key)) {
-                  _selectedItems.remove(item.key);
-                } else {
-                  _selectedItems.add(item.key);
-                }
-              });
-            }
-          },
+          isSelected: _previewFile?.key == item.key,
+          onTap: () => _onFileSelected(item),
+          onView: () => _onFileSelected(item),
           onRename: () => _renameItem(item),
           onMove: () => _moveItem(item),
           onDelete: () => _deleteItem(item),
@@ -1258,6 +1548,7 @@ class _FileGridItem extends StatefulWidget {
   final StorageFile item;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onView;
   final VoidCallback onRename;
   final VoidCallback onMove;
   final VoidCallback onDelete;
@@ -1267,6 +1558,7 @@ class _FileGridItem extends StatefulWidget {
     required this.item,
     required this.isSelected,
     required this.onTap,
+    required this.onView,
     required this.onRename,
     required this.onMove,
     required this.onDelete,
@@ -1350,8 +1642,10 @@ class _FileGridItemState extends State<_FileGridItem> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         elevation: 8,
         items: [
-          if (!isFolder)
+          if (!isFolder) ...[
+            _menuItem('view', 'View', Icons.visibility_outlined),
             _menuItem('download', 'Download', Icons.download_outlined),
+          ],
           _menuItem('rename', 'Rename', Icons.edit_outlined),
           _menuItem('move', 'Move to...', Icons.drive_file_move_outlined),
           const PopupMenuDivider(),
@@ -1366,6 +1660,9 @@ class _FileGridItemState extends State<_FileGridItem> {
 
       if (value != null) {
         switch (value) {
+          case 'view':
+            widget.onView();
+            break;
           case 'download':
             widget.onDownload();
             break;
@@ -1427,6 +1724,7 @@ class _FileGridItemState extends State<_FileGridItem> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: widget.onTap,
+                onDoubleTap: widget.item.isFolder ? null : widget.onView,
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Column(
@@ -1564,6 +1862,7 @@ class _FileListItem extends StatefulWidget {
   final StorageFile item;
   final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onView;
   final VoidCallback onRename;
   final VoidCallback onMove;
   final VoidCallback onDelete;
@@ -1573,6 +1872,7 @@ class _FileListItem extends StatefulWidget {
     required this.item,
     required this.isSelected,
     required this.onTap,
+    required this.onView,
     required this.onRename,
     required this.onMove,
     required this.onDelete,
@@ -1656,8 +1956,10 @@ class _FileListItemState extends State<_FileListItem> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         elevation: 8,
         items: [
-          if (!isFolder)
+          if (!isFolder) ...[
+            _menuItem('view', 'View', Icons.visibility_outlined),
             _menuItem('download', 'Download', Icons.download_outlined),
+          ],
           _menuItem('rename', 'Rename', Icons.edit_outlined),
           _menuItem('move', 'Move to...', Icons.drive_file_move_outlined),
           const PopupMenuDivider(),
@@ -1672,6 +1974,9 @@ class _FileListItemState extends State<_FileListItem> {
 
       if (value != null) {
         switch (value) {
+          case 'view':
+            widget.onView();
+            break;
           case 'download':
             widget.onDownload();
             break;
@@ -1726,6 +2031,7 @@ class _FileListItemState extends State<_FileListItem> {
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTap: widget.onTap,
+                onDoubleTap: widget.item.isFolder ? null : widget.onView,
                 child: Row(
                   children: [
                     Container(

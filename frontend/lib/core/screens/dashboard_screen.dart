@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import '../../team/services/team_member_service.dart';
 import '../theme/app_theme.dart';
 import '../models/company.dart';
 import '../models/user_profile.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/subscription_service.dart';
-import 'plans_screen.dart';
-import 'settings_screen.dart';
-import '../../core/models/team_member.dart';
 
 /// URBox Dashboard - Main App Shell
 ///
@@ -223,25 +221,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (!_isSidebarCollapsed)
                     const SizedBox(height: AppTheme.spacing2),
                   _buildNavItem(
-                    icon: Icons.dashboard_outlined,
-                    activeIcon: Icons.dashboard,
-                    label: 'Dashboard',
-                    route: '/dashboard',
-                    isSelected: currentLocation == '/dashboard',
-                  ),
-                  _buildNavItem(
                     icon: Icons.inbox_outlined,
                     activeIcon: Icons.inbox,
                     label: 'Inbox',
                     route: '/inbox',
                     isSelected: currentLocation.startsWith('/inbox'),
-                  ),
-                  _buildNavItem(
-                    icon: Icons.send_outlined,
-                    activeIcon: Icons.send,
-                    label: 'Sent',
-                    route: '/sent',
-                    isSelected: currentLocation == '/sent',
                   ),
 
                   const SizedBox(height: AppTheme.spacing6),
@@ -249,13 +233,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (!_isSidebarCollapsed) _buildSectionHeader('SETTINGS'),
                   if (!_isSidebarCollapsed)
                     const SizedBox(height: AppTheme.spacing2),
-                  _buildNavItem(
-                    icon: Icons.email_outlined,
-                    activeIcon: Icons.email,
-                    label: 'Email Accounts',
-                    route: '/accounts',
-                    isSelected: currentLocation == '/accounts',
-                  ),
                   _buildNavItem(
                     icon: Icons.folder_outlined,
                     activeIcon: Icons.folder,
@@ -287,9 +264,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: AppTheme.spacing6),
 
-                  if (!_isSidebarCollapsed) _buildSectionHeader('INTEGRATIONS'),
+                  if (!_isSidebarCollapsed) _buildSectionHeader('CONNECTIONS'),
                   if (!_isSidebarCollapsed)
                     const SizedBox(height: AppTheme.spacing2),
+                  _buildNavItem(
+                    icon: Icons.email_outlined,
+                    activeIcon: Icons.email,
+                    label: 'Email Accounts',
+                    route: '/accounts',
+                    isSelected: currentLocation == '/accounts',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.tag,
+                    activeIcon: Icons.tag, // Or custom asset
+                    label: 'Slack',
+                    route: '/slack',
+                    isSelected: currentLocation == '/slack',
+                  ),
                   _buildNavItem(
                     icon: Icons.chat_outlined,
                     activeIcon: Icons.chat,

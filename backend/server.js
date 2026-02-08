@@ -122,6 +122,8 @@ const createSubscriptionRoutes = require('./core/subscription');
 const createPaymentRoutes = require('./payment/payments');
 const createWhatsAppRoutes = require('./whatsapp/whatsapp');
 const createStorageRoutes = require('./storage/storage');
+const createEmailRoutes = require('./email/emailRoutes');
+const createSlackRoutes = require('./slack/slackRoutes');
 const { StorageService } = require('./storage/storage-service');
 
 // Initialize Storage Service
@@ -187,6 +189,8 @@ app.use('/api/subscription', createSubscriptionRoutes(db));
 app.use('/api/payment', createPaymentRoutes(db));
 app.use('/api/whatsapp', createWhatsAppRoutes(db, whatsappSessionManager));
 app.use('/api/storage', createStorageRoutes(storageService, db));
+app.use('/api/email', createEmailRoutes(db));
+app.use('/api/slack', createSlackRoutes(db));
 
 // ============================================================================
 // ERROR HANDLERS
