@@ -1,214 +1,37 @@
-2026/02/06-14:28:03.114 ef17 Reusing MANIFEST /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
-2026/02/06-14:28:03.115 ef17 Recovering log #566
-2026/02/06-14:28:03.120 ef17 Reusing old log /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000566.log 
-2026/02/06-14:29:01.875 ef19 Compacting 1@1 + 3@2 files
-2026/02/06-14:29:01.912 ef19 Generated table #582@1: 84131 keys, 2230537 bytes
-2026/02/06-14:29:01.946 ef19 Generated table #583@1: 100773 keys, 2249720 bytes
-2026/02/06-14:29:01.983 ef19 Generated table #584@1: 94511 keys, 2210553 bytes
-2026/02/06-14:29:01.983 ef19 Compacted 1@1 + 3@2 files => 6690810 bytes
-2026/02/06-14:29:01.985 ef19 compacted to: files[ 0 0 15 0 0 0 0 ]
-2026/02/06-14:29:01.985 ef19 Delete type=2 #564
-2026/02/06-14:29:01.985 ef19 Delete type=2 #563
-2026/02/06-14:29:01.985 ef19 Delete type=2 #562
-2026/02/06-14:29:01.985 ef19 Delete type=2 #569
-2026/02/06-14:32:38.401 ef19 Level-0 table #586: started
-2026/02/06-14:32:38.419 ef19 Level-0 table #586: 1212198 bytes OK
-2026/02/06-14:32:38.422 ef19 Delete type=0 #566
-2026/02/06-14:32:39.029 ef19 Compacting 1@0 + 0@1 files
-2026/02/06-14:32:39.042 ef19 Generated table #587@0: 26683 keys, 541704 bytes
-2026/02/06-14:32:39.044 ef19 Generated table #588@0: 309 keys, 9938 bytes
-2026/02/06-14:32:39.044 ef19 Compacted 1@0 + 0@1 files => 551642 bytes
-2026/02/06-14:32:39.045 ef19 compacted to: files[ 0 2 15 0 0 0 0 ]
-2026/02/06-14:32:39.046 ef19 Delete type=2 #586
-2026/02/06-14:32:42.493 ef19 Compacting 1@1 + 10@2 files
-2026/02/06-14:32:42.538 ef19 Generated table #589@1: 68558 keys, 2239676 bytes
-2026/02/06-14:32:42.553 ef19 Generated table #590@1: 2409 keys, 2158540 bytes
-2026/02/06-14:32:42.569 ef19 Generated table #591@1: 2573 keys, 2160355 bytes
-2026/02/06-14:32:42.583 ef19 Generated table #592@1: 3923 keys, 2158080 bytes
-2026/02/06-14:32:42.600 ef19 Generated table #593@1: 3038 keys, 2156796 bytes
-2026/02/06-14:32:42.614 ef19 Generated table #594@1: 3494 keys, 2163345 bytes
-2026/02/06-14:32:42.639 ef19 Generated table #595@1: 24191 keys, 2210642 bytes
-2026/02/06-14:32:42.671 ef19 Generated table #596@1: 27907 keys, 2269412 bytes
-2026/02/06-14:32:42.703 ef19 Generated table #597@1: 30301 keys, 2257036 bytes
-2026/02/06-14:32:42.723 ef19 Generated table #598@1: 14918 keys, 2185547 bytes
-2026/02/06-14:32:42.725 ef19 Generated table #599@1: 543 keys, 113354 bytes
-2026/02/06-14:32:42.725 ef19 Compacted 1@1 + 10@2 files => 22072783 bytes
-2026/02/06-14:32:42.727 ef19 compacted to: files[ 0 1 16 0 0 0 0 ]
-2026/02/06-14:32:42.727 ef19 Delete type=2 #571
-2026/02/06-14:32:42.727 ef19 Delete type=2 #570
-2026/02/06-14:32:42.727 ef19 Delete type=2 #572
-2026/02/06-14:32:42.727 ef19 Delete type=2 #573
-2026/02/06-14:32:42.727 ef19 Delete type=2 #577
-2026/02/06-14:32:42.727 ef19 Delete type=2 #576
-2026/02/06-14:32:42.727 ef19 Delete type=2 #574
-2026/02/06-14:32:42.727 ef19 Delete type=2 #575
-2026/02/06-14:32:42.727 ef19 Delete type=2 #587
-2026/02/06-14:32:42.727 ef19 Delete type=2 #578
-2026/02/06-14:32:42.727 ef19 Delete type=2 #579
-2026/02/06-14:33:35.063 ef19 Compacting 1@1 + 3@2 files
-2026/02/06-14:33:35.108 ef19 Generated table #600@1: 84017 keys, 2229389 bytes
-2026/02/06-14:33:35.143 ef19 Generated table #601@1: 100798 keys, 2250318 bytes
-2026/02/06-14:33:35.176 ef19 Generated table #602@1: 94885 keys, 2220161 bytes
-2026/02/06-14:33:35.176 ef19 Compacted 1@1 + 3@2 files => 6699868 bytes
-2026/02/06-14:33:35.178 ef19 compacted to: files[ 0 0 16 0 0 0 0 ]
-2026/02/06-14:33:35.178 ef19 Delete type=2 #588
-2026/02/06-14:33:35.178 ef19 Delete type=2 #584
-2026/02/06-14:33:35.178 ef19 Delete type=2 #582
-2026/02/06-14:33:35.178 ef19 Delete type=2 #583
-2026/02/06-14:45:00.352 ef19 Level-0 table #604: started
-2026/02/06-14:45:00.371 ef19 Level-0 table #604: 1221542 bytes OK
-2026/02/06-14:45:00.376 ef19 Delete type=0 #585
-2026/02/06-14:45:24.083 ef19 Compacting 1@0 + 0@1 files
-2026/02/06-14:45:24.098 ef19 Generated table #605@0: 24367 keys, 510113 bytes
-2026/02/06-14:45:24.099 ef19 Generated table #606@0: 641 keys, 18802 bytes
-2026/02/06-14:45:24.099 ef19 Compacted 1@0 + 0@1 files => 528915 bytes
-2026/02/06-14:45:24.101 ef19 compacted to: files[ 0 2 16 0 0 0 0 ]
-2026/02/06-14:45:24.101 ef19 Delete type=2 #604
-2026/02/06-14:45:24.341 ef19 Compacting 1@1 + 10@2 files
-2026/02/06-14:45:24.382 ef19 Generated table #607@1: 72777 keys, 2247143 bytes
-2026/02/06-14:45:24.397 ef19 Generated table #608@1: 2428 keys, 2158245 bytes
-2026/02/06-14:45:24.413 ef19 Generated table #609@1: 2473 keys, 2159374 bytes
-2026/02/06-14:45:24.428 ef19 Generated table #610@1: 3967 keys, 2157962 bytes
-2026/02/06-14:45:24.444 ef19 Generated table #611@1: 3003 keys, 2156410 bytes
-2026/02/06-14:45:24.458 ef19 Generated table #612@1: 3494 keys, 2162176 bytes
-2026/02/06-14:45:24.483 ef19 Generated table #613@1: 22913 keys, 2203443 bytes
-2026/02/06-14:45:24.517 ef19 Generated table #614@1: 27536 keys, 2270661 bytes
-2026/02/06-14:45:24.548 ef19 Generated table #615@1: 31121 keys, 2261151 bytes
-2026/02/06-14:45:24.570 ef19 Generated table #616@1: 15543 keys, 2189974 bytes
-2026/02/06-14:45:24.572 ef19 Generated table #617@1: 849 keys, 158918 bytes
-2026/02/06-14:45:24.572 ef19 Compacted 1@1 + 10@2 files => 22125457 bytes
-2026/02/06-14:45:24.573 ef19 compacted to: files[ 0 1 17 0 0 0 0 ]
-2026/02/06-14:45:24.574 ef19 Delete type=2 #598
-2026/02/06-14:45:24.574 ef19 Delete type=2 #605
-2026/02/06-14:45:24.574 ef19 Delete type=2 #589
-2026/02/06-14:45:24.574 ef19 Delete type=2 #593
-2026/02/06-14:45:24.574 ef19 Delete type=2 #592
-2026/02/06-14:45:24.574 ef19 Delete type=2 #590
-2026/02/06-14:45:24.574 ef19 Delete type=2 #591
-2026/02/06-14:45:24.574 ef19 Delete type=2 #595
-2026/02/06-14:45:24.574 ef19 Delete type=2 #594
-2026/02/06-14:45:24.574 ef19 Delete type=2 #596
-2026/02/06-14:45:24.574 ef19 Delete type=2 #597
-2026/02/06-14:49:18.242 ef19 Compacting 1@1 + 3@2 files
-2026/02/06-14:49:18.286 ef19 Generated table #618@1: 83903 keys, 2230479 bytes
-2026/02/06-14:49:18.321 ef19 Generated table #619@1: 100785 keys, 2251674 bytes
-2026/02/06-14:49:18.354 ef19 Generated table #620@1: 95642 keys, 2237141 bytes
-2026/02/06-14:49:18.354 ef19 Compacted 1@1 + 3@2 files => 6719294 bytes
-2026/02/06-14:49:18.357 ef19 compacted to: files[ 0 0 17 0 0 0 0 ]
-2026/02/06-14:49:18.357 ef19 Delete type=2 #606
-2026/02/06-14:49:18.357 ef19 Delete type=2 #601
-2026/02/06-14:49:18.357 ef19 Delete type=2 #600
-2026/02/06-14:49:18.357 ef19 Delete type=2 #602
-2026/02/06-20:14:52.186 ef17 Level-0 table #622: started
-2026/02/06-20:14:52.210 ef17 Level-0 table #622: 1352308 bytes OK
-2026/02/06-20:14:52.214 ef17 Delete type=0 #603
-2026/02/06-20:15:58.691 ef19 Compacting 1@0 + 0@1 files
-2026/02/06-20:15:58.719 ef19 Generated table #623@0: 24634 keys, 549766 bytes
-2026/02/06-20:15:58.722 ef19 Generated table #624@0: 485 keys, 36050 bytes
-2026/02/06-20:15:58.722 ef19 Compacted 1@0 + 0@1 files => 585816 bytes
-2026/02/06-20:15:58.724 ef19 compacted to: files[ 0 2 17 0 0 0 0 ]
-2026/02/06-20:15:58.729 ef19 Compacting 1@1 + 10@2 files
-2026/02/06-20:15:58.770 ef19 Generated table #625@1: 75814 keys, 2247400 bytes
-2026/02/06-20:15:58.786 ef19 Generated table #626@1: 3774 keys, 2158847 bytes
-2026/02/06-20:15:58.801 ef19 Generated table #627@1: 2376 keys, 2159538 bytes
-2026/02/06-20:15:58.816 ef19 Generated table #628@1: 4001 keys, 2157672 bytes
-2026/02/06-20:15:58.831 ef19 Generated table #629@1: 2948 keys, 2155528 bytes
-2026/02/06-20:15:58.846 ef19 Generated table #630@1: 3520 keys, 2162966 bytes
-2026/02/06-20:15:58.868 ef19 Generated table #631@1: 21369 keys, 2194291 bytes
-2026/02/06-20:15:58.901 ef19 Generated table #632@1: 26989 keys, 2272599 bytes
-2026/02/06-20:15:58.933 ef19 Generated table #633@1: 29339 keys, 2262458 bytes
-2026/02/06-20:15:58.956 ef19 Generated table #634@1: 18807 keys, 2197910 bytes
-2026/02/06-20:15:58.959 ef19 Generated table #635@1: 1161 keys, 193656 bytes
-2026/02/06-20:15:58.959 ef19 Compacted 1@1 + 10@2 files => 22162865 bytes
-2026/02/06-20:15:58.959 ef19 compacted to: files[ 0 1 18 0 0 0 0 ]
-2026/02/06-20:15:58.960 ef19 Delete type=2 #607
-2026/02/06-20:15:58.960 ef19 Delete type=2 #613
-2026/02/06-20:15:58.960 ef19 Delete type=2 #612
-2026/02/06-20:15:58.960 ef19 Delete type=2 #610
-2026/02/06-20:15:58.960 ef19 Delete type=2 #611
-2026/02/06-20:15:58.960 ef19 Delete type=2 #615
-2026/02/06-20:15:58.960 ef19 Delete type=2 #614
-2026/02/06-20:15:58.960 ef19 Delete type=2 #616
-2026/02/06-20:15:58.960 ef19 Delete type=2 #608
-2026/02/06-20:15:58.960 ef19 Delete type=2 #609
-2026/02/06-20:15:58.961 ef19 Delete type=2 #623
-2026/02/06-20:15:58.961 ef19 Delete type=2 #622
-2026/02/06-20:16:05.417 ef19 Level-0 table #637: started
-2026/02/06-20:16:05.432 ef19 Level-0 table #637: 1225838 bytes OK
-2026/02/06-20:16:05.434 ef19 Delete type=0 #621
-2026/02/06-20:16:05.435 ef19 Compacting 1@0 + 1@1 files
-2026/02/06-20:16:05.451 ef19 Generated table #638@0: 35299 keys, 1059288 bytes
-2026/02/06-20:16:05.453 ef19 Generated table #639@0: 488 keys, 36120 bytes
-2026/02/06-20:16:05.454 ef19 Compacted 1@0 + 1@1 files => 1095408 bytes
-2026/02/06-20:16:05.455 ef19 compacted to: files[ 0 2 18 0 0 0 0 ]
-2026/02/06-20:16:05.455 ef19 Delete type=2 #624
-2026/02/06-20:16:05.455 ef19 Delete type=2 #637
-2026/02/06-20:16:05.456 ef19 Compacting 1@1 + 10@2 files
-2026/02/06-20:16:05.490 ef19 Generated table #640@1: 83680 keys, 2231393 bytes
-2026/02/06-20:16:05.513 ef19 Generated table #641@1: 18728 keys, 2191755 bytes
-2026/02/06-20:16:05.532 ef19 Generated table #642@1: 2282 keys, 2160438 bytes
-2026/02/06-20:16:05.557 ef19 Generated table #643@1: 3677 keys, 2158846 bytes
-2026/02/06-20:16:05.571 ef19 Generated table #644@1: 3041 keys, 2152614 bytes
-2026/02/06-20:16:05.585 ef19 Generated table #645@1: 3524 keys, 2163945 bytes
-2026/02/06-20:16:05.602 ef19 Generated table #646@1: 12006 keys, 2171397 bytes
-2026/02/06-20:16:05.632 ef19 Generated table #647@1: 29983 keys, 2266104 bytes
-2026/02/06-20:16:05.664 ef19 Generated table #648@1: 28088 keys, 2263335 bytes
-2026/02/06-20:16:05.693 ef19 Generated table #649@1: 24457 keys, 2233975 bytes
-2026/02/06-20:16:05.698 ef19 Generated table #650@1: 2901 keys, 582933 bytes
-2026/02/06-20:16:05.698 ef19 Compacted 1@1 + 10@2 files => 22576735 bytes
-2026/02/06-20:16:05.699 ef19 compacted to: files[ 0 1 19 0 0 0 0 ]
-2026/02/06-20:16:05.700 ef19 Delete type=2 #638
-2026/02/06-20:16:05.700 ef19 Delete type=2 #629
-2026/02/06-20:16:05.700 ef19 Delete type=2 #628
-2026/02/06-20:16:05.700 ef19 Delete type=2 #626
-2026/02/06-20:16:05.700 ef19 Delete type=2 #632
-2026/02/06-20:16:05.700 ef19 Delete type=2 #633
-2026/02/06-20:16:05.700 ef19 Delete type=2 #627
-2026/02/06-20:16:05.700 ef19 Delete type=2 #631
-2026/02/06-20:16:05.700 ef19 Delete type=2 #625
-2026/02/06-20:16:05.700 ef19 Delete type=2 #630
-2026/02/06-20:16:05.700 ef19 Delete type=2 #634
-2026/02/06-20:16:19.644 ef19 Compacting 1@1 + 3@2 files
-2026/02/06-20:16:19.724 ef19 Generated table #651@1: 83754 keys, 2229258 bytes
-2026/02/06-20:16:19.763 ef19 Generated table #652@1: 100722 keys, 2250868 bytes
-2026/02/06-20:16:19.802 ef19 Generated table #653@1: 96136 keys, 2250980 bytes
-2026/02/06-20:16:19.803 ef19 Generated table #654@1: 114 keys, 5858 bytes
-2026/02/06-20:16:19.803 ef19 Compacted 1@1 + 3@2 files => 6736964 bytes
-2026/02/06-20:16:19.805 ef19 compacted to: files[ 0 0 20 0 0 0 0 ]
-2026/02/06-20:16:19.805 ef19 Delete type=2 #639
-2026/02/06-20:16:19.805 ef19 Delete type=2 #619
-2026/02/06-20:16:19.805 ef19 Delete type=2 #618
-2026/02/06-20:16:19.805 ef19 Delete type=2 #620
-2026/02/06-20:16:21.100 ef19 Level-0 table #656: started
-2026/02/06-20:16:21.112 ef19 Level-0 table #656: 1062656 bytes OK
-2026/02/06-20:16:21.114 ef19 Delete type=0 #636
-2026/02/06-20:16:21.115 ef19 Compacting 1@0 + 0@1 files
-2026/02/06-20:16:21.129 ef19 Generated table #657@0: 38829 keys, 654468 bytes
-2026/02/06-20:16:21.130 ef19 Generated table #658@0: 21 keys, 1314 bytes
-2026/02/06-20:16:21.130 ef19 Compacted 1@0 + 0@1 files => 655782 bytes
-2026/02/06-20:16:21.132 ef19 compacted to: files[ 0 2 20 0 0 0 0 ]
-2026/02/06-20:16:21.132 ef19 Delete type=2 #656
-2026/02/06-20:16:21.385 ef19 Compacting 1@1 + 10@2 files
-2026/02/06-20:16:21.427 ef19 Generated table #659@1: 84245 keys, 2256933 bytes
-2026/02/06-20:16:21.445 ef19 Generated table #660@1: 7334 keys, 2161098 bytes
-2026/02/06-20:16:21.458 ef19 Generated table #661@1: 2316 keys, 2160350 bytes
-2026/02/06-20:16:21.475 ef19 Generated table #662@1: 3881 keys, 2158363 bytes
-2026/02/06-20:16:21.488 ef19 Generated table #663@1: 3049 keys, 2154011 bytes
-2026/02/06-20:16:21.504 ef19 Generated table #664@1: 3493 keys, 2162507 bytes
-2026/02/06-20:16:21.524 ef19 Generated table #665@1: 19990 keys, 2186400 bytes
-2026/02/06-20:16:21.555 ef19 Generated table #666@1: 26830 keys, 2272947 bytes
-2026/02/06-20:16:21.586 ef19 Generated table #667@1: 27955 keys, 2264395 bytes
-2026/02/06-20:16:21.607 ef19 Generated table #668@1: 19359 keys, 1787203 bytes
-2026/02/06-20:16:21.607 ef19 Compacted 1@1 + 10@2 files => 21564207 bytes
-2026/02/06-20:16:21.609 ef19 compacted to: files[ 0 1 20 0 0 0 0 ]
-2026/02/06-20:16:21.609 ef19 Delete type=2 #649
-2026/02/06-20:16:21.609 ef19 Delete type=2 #648
-2026/02/06-20:16:21.609 ef19 Delete type=2 #645
-2026/02/06-20:16:21.609 ef19 Delete type=2 #644
-2026/02/06-20:16:21.609 ef19 Delete type=2 #646
-2026/02/06-20:16:21.609 ef19 Delete type=2 #647
-2026/02/06-20:16:21.609 ef19 Delete type=2 #657
-2026/02/06-20:16:21.609 ef19 Delete type=2 #643
-2026/02/06-20:16:21.609 ef19 Delete type=2 #642
-2026/02/06-20:16:21.609 ef19 Delete type=2 #640
-2026/02/06-20:16:21.609 ef19 Delete type=2 #641
+2026/02/08-12:29:30.879 13ba9 Reusing MANIFEST /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/02/08-12:29:30.881 13ba9 Recovering log #773
+2026/02/08-12:29:30.906 13ba9 Reusing old log /Users/meesam/projects/urbox.ai/backend/.wwebjs_auth/session-a30n5emhO0dxcZ7lsX8UFT7NLO52/Default/IndexedDB/https_web.whatsapp.com_0.indexeddb.leveldb/000773.log 
+2026/02/08-12:29:34.890 13bab Level-0 table #793: started
+2026/02/08-12:29:34.906 13bab Level-0 table #793: 1156330 bytes OK
+2026/02/08-12:29:34.908 13bab Delete type=0 #773
+2026/02/08-12:29:34.909 13bab Compacting 1@0 + 0@1 files
+2026/02/08-12:29:34.921 13bab Generated table #794@0: 23448 keys, 472686 bytes
+2026/02/08-12:29:34.924 13bab Generated table #795@0: 1473 keys, 80073 bytes
+2026/02/08-12:29:34.924 13bab Compacted 1@0 + 0@1 files => 552759 bytes
+2026/02/08-12:29:34.925 13bab compacted to: files[ 0 2 16 0 0 0 0 ]
+2026/02/08-12:29:34.927 13bab Compacting 1@1 + 10@2 files
+2026/02/08-12:29:34.963 13bab Generated table #796@1: 87692 keys, 2237876 bytes
+2026/02/08-12:29:34.987 13bab Generated table #797@1: 28311 keys, 2211055 bytes
+2026/02/08-12:29:35.002 13bab Generated table #798@1: 2271 keys, 2161112 bytes
+2026/02/08-12:29:35.018 13bab Generated table #799@1: 3444 keys, 2158720 bytes
+2026/02/08-12:29:35.031 13bab Generated table #800@1: 3343 keys, 2155335 bytes
+2026/02/08-12:29:35.047 13bab Generated table #801@1: 3351 keys, 2161994 bytes
+2026/02/08-12:29:35.061 13bab Generated table #802@1: 4010 keys, 2159314 bytes
+2026/02/08-12:29:35.096 13bab Generated table #803@1: 34317 keys, 2257244 bytes
+2026/02/08-12:29:35.130 13bab Generated table #804@1: 27550 keys, 2266723 bytes
+2026/02/08-12:29:35.163 13bab Generated table #805@1: 27330 keys, 2258212 bytes
+2026/02/08-12:29:35.164 13bab Generated table #806@1: 137 keys, 108660 bytes
+2026/02/08-12:29:35.164 13bab Compacted 1@1 + 10@2 files => 22136245 bytes
+2026/02/08-12:29:35.165 13bab compacted to: files[ 0 1 17 0 0 0 0 ]
+2026/02/08-12:29:35.166 13bab Delete type=2 #776
+2026/02/08-12:29:35.166 13bab Delete type=2 #777
+2026/02/08-12:29:35.166 13bab Delete type=2 #785
+2026/02/08-12:29:35.166 13bab Delete type=2 #784
+2026/02/08-12:29:35.166 13bab Delete type=2 #779
+2026/02/08-12:29:35.166 13bab Delete type=2 #778
+2026/02/08-12:29:35.166 13bab Delete type=2 #793
+2026/02/08-12:29:35.166 13bab Delete type=2 #783
+2026/02/08-12:29:35.166 13bab Delete type=2 #782
+2026/02/08-12:29:35.166 13bab Delete type=2 #794
+2026/02/08-12:29:35.166 13bab Delete type=2 #780
+2026/02/08-12:29:35.166 13bab Delete type=2 #781

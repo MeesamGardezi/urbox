@@ -13,6 +13,8 @@ class WhatsAppMessage {
   final bool isFromMe;
   final DateTime timestamp;
   final DateTime createdAt;
+  final String? downloadUrl;
+  final String? storageKey;
 
   WhatsAppMessage({
     required this.id,
@@ -28,6 +30,8 @@ class WhatsAppMessage {
     this.isFromMe = false,
     required this.timestamp,
     required this.createdAt,
+    this.downloadUrl,
+    this.storageKey,
   });
 
   factory WhatsAppMessage.fromJson(Map<String, dynamic> json) {
@@ -45,6 +49,8 @@ class WhatsAppMessage {
       isFromMe: json['isFromMe'] as bool? ?? false,
       timestamp: DateTime.parse(json['timestamp'] as String),
       createdAt: DateTime.parse(json['createdAt'] as String),
+      downloadUrl: json['downloadUrl'] as String?,
+      storageKey: json['storageKey'] as String?,
     );
   }
 
@@ -63,6 +69,8 @@ class WhatsAppMessage {
       'isFromMe': isFromMe,
       'timestamp': timestamp.toIso8601String(),
       'createdAt': createdAt.toIso8601String(),
+      'downloadUrl': downloadUrl,
+      'storageKey': storageKey,
     };
   }
 
@@ -80,6 +88,8 @@ class WhatsAppMessage {
     bool? isFromMe,
     DateTime? timestamp,
     DateTime? createdAt,
+    String? downloadUrl,
+    String? storageKey,
   }) {
     return WhatsAppMessage(
       id: id ?? this.id,
@@ -95,6 +105,8 @@ class WhatsAppMessage {
       isFromMe: isFromMe ?? this.isFromMe,
       timestamp: timestamp ?? this.timestamp,
       createdAt: createdAt ?? this.createdAt,
+      downloadUrl: downloadUrl ?? this.downloadUrl,
+      storageKey: storageKey ?? this.storageKey,
     );
   }
 }

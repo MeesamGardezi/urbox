@@ -9,6 +9,7 @@ import '../screens/plans_screen.dart';
 import '../screens/settings_screen.dart';
 import '../../whatsapp/screens/whatsapp_screen.dart';
 import '../../storage/screens/storage_screen.dart';
+import '../../team/screens/team_screen.dart';
 
 /// App Router Configuration
 ///
@@ -260,6 +261,14 @@ class AppRouter {
             name: 'plans',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: PlansScreen()),
+          ),
+
+          // Team Members
+          GoRoute(
+            path: '/team',
+            name: 'team',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: TeamScreen()),
           ),
 
           // Settings

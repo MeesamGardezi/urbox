@@ -111,4 +111,78 @@ class TeamService {
       return {'success': false, 'error': 'Network error: ${e.toString()}'};
     }
   }
+
+  /// Resend invitation email
+  static Future<Map<String, dynamic>> resendInvite(String inviteId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/resend-invite'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'inviteId': inviteId}),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Remove a team member
+  static Future<Map<String, dynamic>> removeMember(String memberId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/remove-member'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'memberId': memberId}),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Disable a team member
+  static Future<Map<String, dynamic>> disableMember(String memberId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/disable-member'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'memberId': memberId}),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Enable a team member
+  static Future<Map<String, dynamic>> enableMember(String memberId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/enable-member'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'memberId': memberId}),
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Cancel a pending invitation
+  static Future<Map<String, dynamic>> cancelInvite(String inviteId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$_baseUrl/cancel-invite/$inviteId'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      return json.decode(response.body);
+    } catch (e) {
+      return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
 }

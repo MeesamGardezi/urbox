@@ -11,7 +11,7 @@
 
 const express = require('express');
 const admin = require('firebase-admin');
-const nodemailer = require('nodemailer');
+const emailService = require('../core/services/email-service');
 
 function createTeamRoutes(db) {
     const router = express.Router();
@@ -387,6 +387,382 @@ function createTeamRoutes(db) {
         }
     });
 
+    /**
+     * GET /members/:companyId
+     * Get all team members for a company
+     */
+    router.get('/members/:companyId', async (req, res) => {
+        const { companyId } = req.params;
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing companyId'
+            });
+        }
+
+        try {
+            const usersSnapshot = await db.collection('users')
+                .where('companyId', '==', companyId)
+                .get();
+
+            const members = usersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
+                updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || null
+            }));
+
+            // Sort by role (owner first) then by email
+            members.sort((a, b) => {
+                if (a.role === 'owner' && b.role !== 'owner') return -1;
+                if (a.role !== 'owner' && b.role === 'owner') return 1;
+                return a.email.localeCompare(b.email);
+            });
+
+            res.json({
+                success: true,
+                members: members
+            });
+
+        } catch (error) {
+            console.error('[Team] Get members error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    /**
+     * GET /pending-invites/:companyId
+     * Get all pending invitations for a company
+     */
+    router.get('/pending-invites/:companyId', async (req, res) => {
+        const { companyId } = req.params;
+
+        if (!companyId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing companyId'
+            });
+        }
+
+        try {
+            const invitesSnapshot = await db.collection('pendingInvites')
+                .where('companyId', '==', companyId)
+                .get();
+
+            const invites = invitesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                expiresAt: doc.data().expiresAt?.toDate?.()?.toISOString() || null,
+                createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
+                updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || null
+            }));
+
+            res.json({
+                success: true,
+                invites: invites
+            });
+
+        } catch (error) {
+            console.error('[Team] Get pending invites error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    /**
+     * GET /invite-token/:inviteId
+     * Get invite token for a pending invitation (for copy link functionality)
+     */
+    router.get('/invite-token/:inviteId', async (req, res) => {
+        const { inviteId } = req.params;
+
+        if (!inviteId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing inviteId'
+            });
+        }
+
+        try {
+            const inviteDoc = await db.collection('pendingInvites').doc(inviteId).get();
+
+            if (!inviteDoc.exists) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Invite not found'
+                });
+            }
+
+            const inviteData = inviteDoc.data();
+
+            res.json({
+                success: true,
+                token: inviteData.inviteToken,
+                inviteLink: getInviteUrl(inviteData.inviteToken)
+            });
+
+        } catch (error) {
+            console.error('[Team] Get invite token error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    /**
+     * DELETE /cancel-invite/:inviteId
+     * Cancel a pending invitation
+     */
+    router.delete('/cancel-invite/:inviteId', async (req, res) => {
+        const { inviteId } = req.params;
+
+        if (!inviteId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing inviteId'
+            });
+        }
+
+        try {
+            await db.collection('pendingInvites').doc(inviteId).delete();
+
+            res.json({
+                success: true,
+                message: 'Invitation cancelled'
+            });
+
+        } catch (error) {
+            console.error('[Team] Cancel invite error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    /**
+     * POST /resend-invite
+     * Resend invitation email for a pending invite
+     */
+    router.post('/resend-invite', async (req, res) => {
+        const { inviteId } = req.body;
+
+        if (!inviteId) {
+            return res.status(400).json({ success: false, error: 'Missing inviteId' });
+        }
+
+        try {
+            const inviteDoc = await db.collection('pendingInvites').doc(inviteId).get();
+
+            if (!inviteDoc.exists) {
+                return res.status(404).json({ success: false, error: 'Invite not found' });
+            }
+
+            const invite = inviteDoc.data();
+
+            // Generate new token and extend expiry
+            const newToken = generateInviteToken();
+            const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+            await inviteDoc.ref.update({
+                inviteToken: newToken,
+                expiresAt: admin.firestore.Timestamp.fromDate(expiresAt),
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            // Send email
+            const emailSent = await sendInvitationEmail({
+                to: invite.email,
+                inviterName: invite.inviterName,
+                companyName: invite.companyName,
+                token: newToken,
+                inboxCount: invite.assignedInboxIds?.length || 0
+            });
+
+            res.json({
+                success: true,
+                emailSent,
+                message: emailSent
+                    ? `Invitation resent to ${invite.email}`
+                    : `New invite link generated. Share: ${getInviteUrl(newToken)}`
+            });
+
+        } catch (error) {
+            console.error('[Team] Resend invite error:', error);
+            res.status(500).json({ success: false, error: error.message });
+        }
+    });
+
+    /**
+     * POST /remove-member
+     * Remove a team member from the company
+     */
+    router.post('/remove-member', async (req, res) => {
+        const { memberId } = req.body;
+
+        if (!memberId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing memberId'
+            });
+        }
+
+        try {
+            const memberDoc = await db.collection('users').doc(memberId).get();
+
+            if (!memberDoc.exists) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Member not found'
+                });
+            }
+
+            const memberData = memberDoc.data();
+
+            // Prevent removing owners
+            if (memberData.role === 'owner') {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Cannot remove company owner'
+                });
+            }
+
+            // Get company name for email
+            let companyName = 'your team';
+            try {
+                const companyDoc = await db.collection('companies').doc(memberData.companyId).get();
+                if (companyDoc.exists) {
+                    companyName = companyDoc.data().name;
+                }
+            } catch (e) {
+                console.log('[Team] Failed to fetch company name for email', e);
+            }
+
+            // Send notification email
+            try {
+                await emailService.sendMemberRemovedNotification({
+                    to: memberData.email,
+                    companyName: companyName
+                });
+            } catch (e) {
+                console.log('[Team] Failed to send removal email:', e);
+            }
+
+            // Delete the member
+            await memberDoc.ref.delete();
+
+            console.log(`[Team] Member ${memberData.email} removed from company ${memberData.companyId}`);
+
+            res.json({
+                success: true,
+                message: `Member ${memberData.email} has been removed`
+            });
+
+        } catch (error) {
+            console.error('[Team] Remove member error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    /**
+     * POST /disable-member
+     * Disable a team member's access
+     */
+    router.post('/disable-member', async (req, res) => {
+        const { memberId } = req.body;
+
+        if (!memberId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing memberId'
+            });
+        }
+
+        try {
+            const memberDoc = await db.collection('users').doc(memberId).get();
+
+            if (!memberDoc.exists) {
+                return res.status(404).json({
+                    success: false,
+                    error: 'Member not found'
+                });
+            }
+
+            const memberData = memberDoc.data();
+
+            // Prevent disabling owners
+            if (memberData.role === 'owner') {
+                return res.status(403).json({
+                    success: false,
+                    error: 'Cannot disable company owner'
+                });
+            }
+
+            await memberDoc.ref.update({
+                status: 'disabled',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            console.log(`[Team] Member ${memberData.email} disabled`);
+
+            res.json({
+                success: true,
+                message: `Member ${memberData.email} has been disabled`
+            });
+
+        } catch (error) {
+            console.error('[Team] Disable member error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
+    /**
+     * POST /enable-member
+     * Re-enable a team member's access
+     */
+    router.post('/enable-member', async (req, res) => {
+        const { memberId } = req.body;
+
+        if (!memberId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Missing memberId'
+            });
+        }
+
+        try {
+            await db.collection('users').doc(memberId).update({
+                status: 'active',
+                updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+
+            res.json({
+                success: true,
+                message: 'Member has been enabled'
+            });
+
+        } catch (error) {
+            console.error('[Team] Enable member error:', error);
+            res.status(500).json({
+                success: false,
+                error: error.message
+            });
+        }
+    });
+
     // Helper functions
 
     function generateInviteToken() {
@@ -408,47 +784,13 @@ function createTeamRoutes(db) {
     }
 
     async function sendInvitationEmail({ to, inviterName, companyName, token, inboxCount }) {
-        try {
-            // Check if SMTP is configured
-            if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-                console.log('[Team] SMTP not configured, skipping email');
-                return false;
-            }
-
-            const transporter = nodemailer.createTransporter({
-                host: process.env.SMTP_HOST,
-                port: parseInt(process.env.SMTP_PORT),
-                secure: false,
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS
-                }
-            });
-
-            const inviteUrl = getInviteUrl(token);
-            const inboxText = inboxCount > 0
-                ? `You'll have access to ${inboxCount} shared inbox${inboxCount > 1 ? 'es' : ''}.`
-                : 'Inboxes will be assigned to you after you join.';
-
-            await transporter.sendMail({
-                from: process.env.SMTP_USER,
-                to: to,
-                subject: `${inviterName} invited you to join ${companyName}`,
-                html: `
-                    <h2>You've been invited to join ${companyName}</h2>
-                    <p>${inviterName} has invited you to join their team on Shared Mailbox.</p>
-                    <p>${inboxText}</p>
-                    <p><a href="${inviteUrl}" style="display: inline-block; padding: 12px 24px; background-color: #6366F1; color: white; text-decoration: none; border-radius: 6px;">Accept Invitation</a></p>
-                    <p>Or copy this link: ${inviteUrl}</p>
-                    <p style="color: #666; font-size: 12px;">This invitation expires in 7 days.</p>
-                `
-            });
-
-            return true;
-        } catch (error) {
-            console.error('[Team] Email send error:', error);
-            return false;
-        }
+        return emailService.sendTeamInvitation({
+            to,
+            inviterName,
+            companyName,
+            inviteLink: getInviteUrl(token),
+            inboxCount
+        });
     }
 
     return router;

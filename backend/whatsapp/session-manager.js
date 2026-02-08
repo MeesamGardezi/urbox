@@ -14,6 +14,9 @@ const admin = require('firebase-admin');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
+const { StorageService } = require('../storage/storage-service');
+
+const storageService = new StorageService();
 
 // Configuration
 const CONFIG = {
@@ -52,29 +55,33 @@ class WhatsAppSessionManager {
 
             console.log(`[WhatsApp] Starting session for user ${userId}`);
 
-            // Initialize WhatsApp client with persistent auth
-            const client = new Client({
-                authStrategy: new LocalAuth({
-                    clientId: userId,
-                    dataPath: path.join(process.cwd(), '.wwebjs_auth')
-                }),
-                authTimeoutMs: CONFIG.AUTH_TIMEOUT,
-                qrMaxRetries: CONFIG.QR_MAX_RETRIES,
-                restartOnAuthFail: true,
-                takeoverOnConflict: true,
-                takeoverTimeoutMs: 10000,
-                puppeteer: {
-                    headless: true,
-                    args: [
-                        '--no-sandbox',
-                        '--disable-setuid-sandbox',
-                        '--disable-dev-shm-usage',
-                        '--disable-accelerated-2d-canvas',
-                        '--no-first-run',
-                        '--disable-gpu'
-                    ]
-                }
-            });
+            // Function to create client configuration
+            const createClient = () => {
+                return new Client({
+                    authStrategy: new LocalAuth({
+                        clientId: userId,
+                        dataPath: path.join(process.cwd(), '.wwebjs_auth')
+                    }),
+                    authTimeoutMs: CONFIG.AUTH_TIMEOUT,
+                    qrMaxRetries: CONFIG.QR_MAX_RETRIES,
+                    restartOnAuthFail: true,
+                    takeoverOnConflict: true,
+                    takeoverTimeoutMs: 10000,
+                    puppeteer: {
+                        headless: true,
+                        args: [
+                            '--no-sandbox',
+                            '--disable-setuid-sandbox',
+                            '--disable-dev-shm-usage',
+                            '--disable-accelerated-2d-canvas',
+                            '--no-first-run',
+                            '--disable-gpu'
+                        ]
+                    }
+                });
+            };
+
+            let client = createClient();
 
             // Store session info
             this.activeSessions.set(userId, {
@@ -89,7 +96,35 @@ class WhatsAppSessionManager {
             this._setupClientHandlers(client, userId, companyId);
 
             // Initialize client (this triggers QR generation or auth)
-            await client.initialize();
+            try {
+                await client.initialize();
+            } catch (initError) {
+                if (initError.message && initError.message.includes('browser is already running')) {
+                    console.warn(`[WhatsApp] Session lock detected for ${userId}. Attempting to clear lock and retry...`);
+
+                    // Remove from active sessions before retrying to avoid pollution
+                    this.activeSessions.delete(userId);
+
+                    // Force cleanup of the lock file
+                    this._forceCleanupSessionDirectory(userId);
+
+                    // Re-create client and retry
+                    client = createClient();
+                    this.activeSessions.set(userId, {
+                        client,
+                        companyId,
+                        status: 'initializing',
+                        phone: null,
+                        name: null
+                    });
+                    this._setupClientHandlers(client, userId, companyId);
+
+                    await client.initialize();
+                    console.log(`[WhatsApp] Retry successful for ${userId}`);
+                } else {
+                    throw initError;
+                }
+            }
 
             // Update Firestore
             await this._updateFirestoreStatus(userId, {
@@ -110,6 +145,21 @@ class WhatsAppSessionManager {
                 success: false,
                 error: error.message
             };
+        }
+    }
+
+    /**
+     * Force cleanup of session directory lock
+     */
+    _forceCleanupSessionDirectory(userId) {
+        try {
+            const lockPath = path.join(process.cwd(), '.wwebjs_auth', `session-${userId}`, 'SingletonLock');
+            if (fs.existsSync(lockPath)) {
+                console.log(`[WhatsApp] Removing SingletonLock for ${userId}`);
+                fs.unlinkSync(lockPath);
+            }
+        } catch (e) {
+            console.error(`[WhatsApp] Error forcing cleanup for ${userId}:`, e.message);
         }
     }
 
@@ -303,8 +353,76 @@ class WhatsAppSessionManager {
             console.log(`[WhatsApp] New message in monitored group ${chat.name} for user ${userId} (fromMe: ${msg.fromMe})`);
 
             // Get sender info
-            const contact = await msg.getContact();
-            const senderName = contact.pushname || contact.number || 'Unknown';
+            let senderName = 'Unknown';
+            try {
+                const contact = await msg.getContact();
+                senderName = contact.pushname || contact.number || 'Unknown';
+            } catch (error) {
+                console.warn(`[WhatsApp] Could not get contact info: ${error.message}`);
+                if (msg.fromMe) senderName = 'You';
+            }
+
+            let mediaData = {
+                storageKey: null,
+                downloadUrl: null
+            };
+
+            // Process media if present
+            if (msg.hasMedia) {
+                try {
+                    console.log(`[WhatsApp] Downloading media for message in ${chat.name}`);
+                    const media = await msg.downloadMedia();
+
+                    if (media) {
+                        // Determine extension
+                        let extension = 'bin';
+                        if (media.mimetype) {
+                            extension = media.mimetype.split('/')[1];
+                            if (extension && extension.includes(';')) {
+                                extension = extension.split(';')[0];
+                            }
+                        }
+
+                        // Filename: timestamp.extension
+                        const timestamp = msg.timestamp || Math.floor(Date.now() / 1000);
+                        const filename = `${timestamp}.${extension}`;
+
+                        // Buffer
+                        const buffer = Buffer.from(media.data, 'base64');
+
+                        // Prepare file object for StorageService
+                        const file = {
+                            buffer: buffer,
+                            originalname: filename,
+                            mimetype: media.mimetype,
+                            size: buffer.length
+                        };
+
+                        // Upload to Folder: CompanyId/GroupName
+                        const cleanGroupName = chat.name.replace(/[^a-zA-Z0-9-_ ]/g, '_').trim(); // Ensure valid folder name
+                        const folderPath = `${companyId}/${cleanGroupName}`;
+                        const uploadResult = await storageService.uploadFile(file, folderPath);
+
+                        if (uploadResult.success) {
+                            mediaData.storageKey = uploadResult.key;
+
+                            // Get presigned URL for download
+                            // Note: Presigned URLs have an expiration.
+                            // If the user wants a permanent URL, the storage bucket needs to be public or we need a proxy.
+                            // Assuming presigned URL is acceptable for immediate use, or the app uses the 'downloadUrl' refreshes.
+                            // However, saving a presigned URL to Firestore means it will expire.
+                            // Better practice: Frontend should request a fresh URL using the storageKey.
+                            // BUT, user explicitly said "downloadurl will be there in the message".
+                            const presigned = await storageService.getPresignedDownloadUrl(uploadResult.key);
+                            mediaData.downloadUrl = presigned.presignedUrl;
+
+                            console.log(`[WhatsApp] Media saved to ${uploadResult.key}`);
+                        }
+                    }
+                } catch (mediaError) {
+                    console.error(`[WhatsApp] Error handling media:`, mediaError);
+                }
+            }
 
             // Save message to Firestore
             await this.db.collection('whatsappMessages').add({
@@ -317,6 +435,7 @@ class WhatsAppSessionManager {
                 body: msg.body || '',
                 hasMedia: msg.hasMedia,
                 mediaType: msg.type,
+                ...mediaData, // Add storage info
                 isFromMe: msg.fromMe || false,
                 timestamp: admin.firestore.Timestamp.fromDate(new Date(msg.timestamp * 1000)),
                 createdAt: admin.firestore.FieldValue.serverTimestamp()

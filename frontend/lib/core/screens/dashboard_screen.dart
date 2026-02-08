@@ -8,6 +8,7 @@ import '../../auth/services/auth_service.dart';
 import '../services/subscription_service.dart';
 import 'plans_screen.dart';
 import 'settings_screen.dart';
+import '../../core/models/team_member.dart';
 
 /// URBox Dashboard - Main App Shell
 ///
@@ -31,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isSidebarCollapsed = false;
   String? _companyId;
   String? _userName;
+  int? _teamMemberCount;
 
   @override
   void initState() {
@@ -115,6 +117,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
           );
+        }
+      }
+
+      if (_company != null) {
+        try {
+          final members = await TeamMemberService.getTeamMembers(_company!.id);
+          _teamMemberCount = members.length;
+        } catch (e) {
+          debugPrint('Error loading team count: $e');
         }
       }
 
@@ -258,6 +269,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     label: 'Plans & Billing',
                     route: '/plans',
                     isSelected: currentLocation == '/plans',
+                  ),
+                  _buildNavItem(
+                    icon: Icons.people_outline,
+                    activeIcon: Icons.people,
+                    label: 'Team Members',
+                    route: '/team',
+                    isSelected: currentLocation == '/team',
                   ),
                   _buildNavItem(
                     icon: Icons.settings_outlined,
@@ -742,11 +760,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
         const SizedBox(width: AppTheme.spacing4),
         Expanded(
-          child: _buildStatCard(
-            icon: Icons.people_outline,
-            label: 'Team Members',
-            value: '-',
-            color: AppTheme.secondary,
+          child: InkWell(
+            onTap: () => context.go('/team'),
+            borderRadius: BorderRadius.circular(12),
+            child: _buildStatCard(
+              icon: Icons.people_outline,
+              label: 'Team Members',
+              value: _teamMemberCount?.toString() ?? '-',
+              color: AppTheme.secondary,
+            ),
           ),
         ),
         const SizedBox(width: AppTheme.spacing4),
@@ -809,8 +831,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.people_outline,
               title: 'Invite team members',
               description: 'Collaborate with your team on shared inboxes',
-              completed: false,
-              onTap: () => context.go('/settings'),
+              completed: (_teamMemberCount ?? 0) > 1,
+              onTap: () => context.go('/team'),
             ),
             const Divider(height: AppTheme.spacing6),
             _buildGettingStartedItem(
