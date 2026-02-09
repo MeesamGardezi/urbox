@@ -95,44 +95,51 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? _userProfile!.displayName
           : user!.email?.split('@').first;
 
-      // Fetch company data
+      // =====================================================================
+      // FIX: SubscriptionService.getCompanyPlan() returns FLAT data:
+      //   {success: true, companyName: '...', plan: '...', isFree: ..., ...}
+      // There is NO nested 'company' key. The old code checked for
+      // companyResponse['company'] != null which was ALWAYS null,
+      // so _company was never set, and inboxes were never fetched.
+      // =====================================================================
       if (_userProfile!.companyId.isNotEmpty) {
         final companyResponse = await SubscriptionService.getCompanyPlan(
           _userProfile!.companyId,
         );
 
-        if (companyResponse['success'] == true &&
-            companyResponse['company'] != null) {
-          final companyData =
-              companyResponse['company'] as Map<String, dynamic>;
-
+        if (companyResponse['success'] == true) {
           _company = Company(
             id: _userProfile!.companyId,
-            name: companyData['companyName']?.toString() ?? 'Your Company',
+            name: companyResponse['companyName']?.toString() ?? 'Your Company',
             ownerId: '',
-            plan: companyData['plan']?.toString() ?? 'free',
-            isFree: companyData['isFree'] == true,
-            isProFree: companyData['isProFree'] == true,
+            plan: companyResponse['plan']?.toString() ?? 'free',
+            isFree: companyResponse['isFree'] == true,
+            isProFree: companyResponse['isProFree'] == true,
             subscriptionStatus:
-                companyData['subscriptionStatus']?.toString() ?? 'none',
+                companyResponse['subscriptionStatus']?.toString() ?? 'none',
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
+            memberCount: companyResponse['memberCount'] is int
+                ? companyResponse['memberCount']
+                : 1,
           );
         }
       }
 
-      if (_company != null) {
+      // =====================================================================
+      // FIX: Fetch team members and custom inboxes using companyId directly.
+      // Don't gate this behind _company != null — even if subscription API
+      // fails, we still want inboxes in the sidebar.
+      // =====================================================================
+      if (_userProfile!.companyId.isNotEmpty) {
         try {
-          // Parallel fetch team and inboxes
           final results = await Future.wait([
-            TeamMemberService.getTeamMembers(_company!.id),
-            CustomInboxService.getInboxes(_company!.id),
+            TeamMemberService.getTeamMembers(_userProfile!.companyId),
+            CustomInboxService.getInboxes(_userProfile!.companyId),
           ]);
 
           _teamMemberCount = (results[0] as List).length;
-          // Explicitly cast the dynamic list to List<CustomInbox>
-          final rawInboxes = results[1] as List<dynamic>;
-          _customInboxes = rawInboxes.cast<CustomInbox>();
+          _customInboxes = List<CustomInbox>.from(results[1] as List);
 
           debugPrint(
             'Dashboard loaded: Team Members=${_teamMemberCount}, Custom Inboxes=${_customInboxes.length}',
@@ -905,7 +912,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               icon: Icons.inbox,
               title: 'Create a shared inbox',
               description: 'Organize your emails with custom inboxes',
-              completed: false,
+              completed: _customInboxes.isNotEmpty,
               onTap: () => context.go('/custom-inboxes'),
             ),
           ],

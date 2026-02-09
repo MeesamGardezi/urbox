@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +13,7 @@ import '../../email/services/email_service.dart';
 import '../../whatsapp/services/whatsapp_service.dart';
 import '../../custom_inboxes/services/custom_inbox_service.dart';
 import '../../core/models/custom_inbox.dart';
+import '../../auth/services/auth_service.dart';
 
 // UI
 import '../../core/ui/resizable_shell.dart';
@@ -65,41 +64,17 @@ class _InboxScreenState extends State<InboxScreen> {
   void didUpdateWidget(InboxScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.customInboxId != oldWidget.customInboxId) {
+      if (mounted) {
+        setState(() {
+          _items = [];
+          _allItems = [];
+          _isLoading = true;
+          _error = null;
+        });
+      }
       _fetchInboxItems();
     }
   }
-
-  Future<Map<String, dynamic>?> _fetchUserProfile(String uid) async {
-    // Quick fetch user profile helper
-    try {
-      // Import http if not available?
-      // Actually AuthService is better.
-      // But let's reuse what we have or import AuthService.
-      // Since I can't add imports easily without scrolling up, I'll use direct http or AuthService if imported
-      // Wait, AuthService is not imported.
-      // I'll add AuthService import above.
-      // But wait I just added imports and didn't include AuthService.
-      // I'll use a hack to get companyId from accounts if possible, or just fetch it.
-      // Providing a helper method right here using http is easiest if I add 'dart:convert'.
-      // But verify 'dart:convert' is imported. Yes line 1.
-      final response = await http.get(
-        Uri.parse('$_baseUrl/auth/user/$uid'), // Need base url
-        headers: {'Content-Type': 'application/json'},
-      );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data['success'] == true) {
-          return data['user'];
-        }
-      }
-    } catch (e) {
-      print('Error fetching user for custom inbox: $e');
-    }
-    return null;
-  }
-
-  static const String _baseUrl =
-      'http://localhost:3000/api'; // Hardcoded fallback or use value from config
 
   @override
   void dispose() {
@@ -148,26 +123,36 @@ class _InboxScreenState extends State<InboxScreen> {
       // 0. Load Custom Inbox if needed
       CustomInbox? customInbox;
       if (widget.customInboxId != null) {
-        // Need to know companyId here...
-        // Assuming we can get user profile or assume companyId is available from auth service
-        // But getInboxById doesn't exist? Only getInboxes(companyId).
-        // Let's modify CustomInboxService to provide getInboxById or filter list.
-        // For now, let's assume we can fetch all and find it, or add getById.
-        // Actually, let's optimistically assume getInboxes fetches all for user's company.
-        // But we don't have companyId easily here without fetching user profile.
-        // Let's fetch user profile first.
-        final userProfile = await _fetchUserProfile(user.uid);
-        if (userProfile != null) {
-          final allInboxes = await CustomInboxService.getInboxes(
-            userProfile['companyId'],
+        debugPrint('Loading custom inbox: ${widget.customInboxId}');
+        final profileResponse = await AuthService.getUserProfile(user.uid);
+
+        if (profileResponse['success'] != true) {
+          throw Exception(
+            'Failed to load user profile to verify custom inbox access',
           );
-          try {
-            customInbox = allInboxes.firstWhere(
-              (i) => i.id == widget.customInboxId,
-            );
-          } catch (e) {
-            print('Custom Inbox not found: ${widget.customInboxId}');
+        }
+
+        final userData = profileResponse['user'];
+        final companyId = userData['companyId']?.toString();
+
+        if (companyId == null || companyId.isEmpty) {
+          throw Exception('Company ID not found for user');
+        }
+
+        final allInboxes = await CustomInboxService.getInboxes(companyId);
+        try {
+          customInbox = allInboxes.firstWhere(
+            (i) => i.id == widget.customInboxId,
+          );
+          debugPrint('Found custom inbox: ${customInbox.name}');
+        } catch (_) {
+          if (mounted) {
+            setState(() {
+              _error = 'Custom inbox not found. It may have been deleted.';
+              _isLoading = false;
+            });
           }
+          return;
         }
       }
 
