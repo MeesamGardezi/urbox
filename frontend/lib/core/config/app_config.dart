@@ -16,6 +16,9 @@ class AppConfig {
   static const String paymentEndpoint = '$apiBaseUrl/api/payment';
   static const String whatsappEndpoint = '$apiBaseUrl/api/whatsapp';
 
+  /// Custom Inbox API Endpoints
+  static const String customInboxEndpoint = '$apiBaseUrl/api/custom-inbox';
+
   /// Email API Endpoints
   static const String emailEndpoint = '$apiBaseUrl/api/email';
 

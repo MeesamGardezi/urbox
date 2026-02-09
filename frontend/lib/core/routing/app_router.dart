@@ -4,7 +4,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import 'go_router_refresh_stream.dart';
 import '../../auth/screens/auth_screen.dart';
-import '../screens/dashboard_screen.dart';
+
+import '../screens/role_aware_shell.dart';
 import '../screens/plans_screen.dart';
 import '../screens/settings_screen.dart';
 import '../../whatsapp/screens/whatsapp_screen.dart';
@@ -13,6 +14,7 @@ import '../../team/screens/team_screen.dart';
 import '../../email/screens/accounts_screen.dart';
 import '../../slack/screens/slack_screen.dart';
 import '../../inbox/screens/inbox_screen.dart';
+import '../../custom_inboxes/screens/custom_inboxes_screen.dart';
 
 /// App Router Configuration
 ///
@@ -92,11 +94,11 @@ class AppRouter {
         },
       ),
 
-      // Shell Route - DashboardScreen wraps everything
+      // Shell Route - RoleAwareShell wraps everything
       ShellRoute(
         navigatorKey: _shellNavigatorKey,
         builder: (context, state, child) {
-          return DashboardScreen(child: child);
+          return RoleAwareShell(child: child);
         },
         routes: [
           GoRoute(path: '/', redirect: (context, state) => '/inbox'),
@@ -106,8 +108,22 @@ class AppRouter {
           GoRoute(
             path: '/inbox',
             name: 'inbox',
-            pageBuilder: (context, state) =>
-                const NoTransitionPage(child: InboxScreen()),
+            pageBuilder: (context, state) {
+              final customInboxId = state.uri.queryParameters['customInboxId'];
+              return NoTransitionPage(
+                child: InboxScreen(customInboxId: customInboxId),
+              );
+            },
+          ),
+
+          // View Specific Custom Inbox
+          GoRoute(
+            path: '/custom-inbox/:id',
+            name: 'viewCustomInbox',
+            pageBuilder: (context, state) {
+              final id = state.pathParameters['id'];
+              return NoTransitionPage(child: InboxScreen(customInboxId: id));
+            },
           ),
 
           // Email Accounts
@@ -122,37 +138,8 @@ class AppRouter {
           GoRoute(
             path: '/custom-inboxes',
             name: 'customInboxes',
-            pageBuilder: (context, state) => NoTransitionPage(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(32),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.folder_outlined,
-                        size: 64,
-                        color: Theme.of(
-                          context,
-                        ).iconTheme.color?.withOpacity(0.5),
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Custom Inboxes',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Coming Soon',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: CustomInboxesScreen()),
           ),
 
           // Plans & Billing

@@ -124,6 +124,7 @@ const createWhatsAppRoutes = require('./whatsapp/whatsapp');
 const createStorageRoutes = require('./storage/storage');
 const createEmailRoutes = require('./email/emailRoutes');
 const createSlackRoutes = require('./slack/slackRoutes');
+const createCustomInboxRoutes = require('./custom-inbox/customInboxRoutes');
 const { StorageService } = require('./storage/storage-service');
 
 // Initialize Storage Service
@@ -191,6 +192,7 @@ app.use('/api/whatsapp', createWhatsAppRoutes(db, whatsappSessionManager));
 app.use('/api/storage', createStorageRoutes(storageService, db));
 app.use('/api/email', createEmailRoutes(db));
 app.use('/api/slack', createSlackRoutes(db));
+app.use('/api/custom-inbox', createCustomInboxRoutes(db));
 
 // ============================================================================
 // ERROR HANDLERS

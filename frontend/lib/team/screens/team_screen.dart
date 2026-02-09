@@ -7,6 +7,8 @@ import 'dart:convert';
 import '../../core/config/app_config.dart';
 import '../../core/models/team_member.dart';
 import '../services/team_member_service.dart';
+import '../../custom_inboxes/services/custom_inbox_service.dart';
+import '../../core/models/custom_inbox.dart';
 
 /// Team management screen for company owners
 /// Allows inviting team members and managing them
@@ -24,6 +26,7 @@ class _TeamScreenState extends State<TeamScreen>
   bool _isLoading = true;
   List<TeamMember> _members = [];
   List<TeamMember> _pendingInvites = [];
+  List<CustomInbox> _availableInboxes = [];
   Timer? _refreshTimer;
 
   @override
@@ -45,6 +48,9 @@ class _TeamScreenState extends State<TeamScreen>
     super.dispose();
   }
 
+  bool _isOwner = false;
+  bool _accessDenied = false;
+
   Future<void> _fetchCompanyIdAndLoad() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -59,11 +65,19 @@ class _TeamScreenState extends State<TeamScreen>
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true && data['user'] != null) {
+          final userData = data['user'];
+          final role = userData['role'];
+
           if (mounted) {
             setState(() {
-              _companyId = data['user']['companyId'];
+              _companyId = userData['companyId'];
+              _isOwner = role == 'owner';
+              _accessDenied = !_isOwner;
             });
-            await _loadData();
+
+            if (_isOwner) {
+              await _loadData();
+            }
           }
         }
       }
@@ -82,11 +96,18 @@ class _TeamScreenState extends State<TeamScreen>
     try {
       final members = await TeamMemberService.getTeamMembers(_companyId!);
       final invites = await TeamMemberService.getPendingInvites(_companyId!);
+      List<CustomInbox> inboxes = [];
+      try {
+        inboxes = await CustomInboxService.getInboxes(_companyId!);
+      } catch (e) {
+        debugPrint('Error loading inboxes: $e');
+      }
 
       if (mounted) {
         setState(() {
           _members = members;
           _pendingInvites = invites;
+          _availableInboxes = inboxes;
         });
       }
     } catch (e) {
@@ -283,6 +304,41 @@ class _TeamScreenState extends State<TeamScreen>
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_accessDenied) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.lock_outline,
+                size: 48,
+                color: Colors.red.shade400,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Access Restricted',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade800,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Only workspace owners can manage team settings.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 16),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_companyId == null) {
@@ -517,6 +573,9 @@ class _TeamScreenState extends State<TeamScreen>
                       await TeamMemberService.enableMember(member.id);
                       await _loadData();
                       break;
+                    case 'inboxes':
+                      _showAssignInboxesDialog(member);
+                      break;
                     case 'remove':
                       _confirmRemoveMember(member);
                       break;
@@ -545,6 +604,19 @@ class _TeamScreenState extends State<TeamScreen>
                         ],
                       ),
                     ),
+                  const PopupMenuItem(
+                    value: 'inboxes',
+                    child: Row(
+                      children: [
+                        Icon(Icons.folder_shared, size: 18, color: Colors.blue),
+                        SizedBox(width: 8),
+                        Text(
+                          'Assign Inboxes',
+                          style: TextStyle(color: Colors.blue),
+                        ),
+                      ],
+                    ),
+                  ),
                   const PopupMenuItem(
                     value: 'remove',
                     child: Row(
@@ -639,6 +711,95 @@ class _TeamScreenState extends State<TeamScreen>
             child: const Text('Remove'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAssignInboxesDialog(TeamMember member) {
+    List<String> selectedInboxIds = List.from(member.assignedInboxIds);
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            title: Text(
+              'Assign Inboxes to ${member.displayName ?? member.email}',
+            ),
+            content: SizedBox(
+              width: 400,
+              child: _availableInboxes.isEmpty
+                  ? const Text('No custom inboxes available to assign.')
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: _availableInboxes.length,
+                      itemBuilder: (context, index) {
+                        final inbox = _availableInboxes[index];
+                        final isSelected = selectedInboxIds.contains(inbox.id);
+                        return CheckboxListTile(
+                          value: isSelected,
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                selectedInboxIds.add(inbox.id);
+                              } else {
+                                selectedInboxIds.remove(inbox.id);
+                              }
+                            });
+                          },
+                          secondary: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Color(inbox.color).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Icon(
+                              Icons.folder,
+                              color: Color(inbox.color),
+                              size: 16,
+                            ),
+                          ),
+                          title: Text(inbox.name),
+                          dense: true,
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  try {
+                    await TeamMemberService.updateAssignedInboxes(
+                      member.id,
+                      selectedInboxIds,
+                    );
+                    if (mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Inboxes updated successfully'),
+                        ),
+                      );
+                      _loadData(); // Refresh to update view
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Error updating inboxes: $e')),
+                      );
+                    }
+                  }
+                },
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

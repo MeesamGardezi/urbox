@@ -613,7 +613,11 @@ class _StorageScreenState extends State<StorageScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _previewUrl == null
                 ? const Center(child: Text('Preview not available'))
-                : _buildFilePreview(_previewFile!, _previewUrl!),
+                : _buildFilePreview(
+                    _previewFile!,
+                    _previewUrl!,
+                    headers: _storageService?.headers,
+                  ),
           ),
 
           const Divider(height: 1),
@@ -726,7 +730,11 @@ class _StorageScreenState extends State<StorageScreen> {
     );
   }
 
-  Widget _buildFilePreview(StorageFile file, String url) {
+  Widget _buildFilePreview(
+    StorageFile file,
+    String url, {
+    Map<String, String>? headers,
+  }) {
     final ext = file.extension;
 
     if (['jpg', 'jpeg', 'png', 'gif', 'webp'].contains(ext)) {
@@ -737,6 +745,7 @@ class _StorageScreenState extends State<StorageScreen> {
         child: Center(
           child: Image.network(
             url,
+            headers: headers,
             fit: BoxFit.contain,
             loadingBuilder: (context, child, loadingProgress) {
               if (loadingProgress == null) return child;

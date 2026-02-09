@@ -7,6 +7,8 @@ import '../models/company.dart';
 import '../models/user_profile.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/subscription_service.dart';
+import '../../custom_inboxes/services/custom_inbox_service.dart';
+import '../../core/models/custom_inbox.dart';
 
 /// URBox Dashboard - Main App Shell
 ///
@@ -31,6 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _companyId;
   String? _userName;
   int? _teamMemberCount;
+  List<CustomInbox> _customInboxes = [];
 
   @override
   void initState() {
@@ -120,10 +123,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (_company != null) {
         try {
-          final members = await TeamMemberService.getTeamMembers(_company!.id);
-          _teamMemberCount = members.length;
+          // Parallel fetch team and inboxes
+          final results = await Future.wait([
+            TeamMemberService.getTeamMembers(_company!.id),
+            CustomInboxService.getInboxes(_company!.id),
+          ]);
+
+          _teamMemberCount = (results[0] as List).length;
+          // Explicitly cast the dynamic list to List<CustomInbox>
+          final rawInboxes = results[1] as List<dynamic>;
+          _customInboxes = rawInboxes.cast<CustomInbox>();
+
+          debugPrint(
+            'Dashboard loaded: Team Members=${_teamMemberCount}, Custom Inboxes=${_customInboxes.length}',
+          );
+          for (var i in _customInboxes) {
+            debugPrint(' - Inbox: ${i.name} (${i.id})');
+          }
         } catch (e) {
-          debugPrint('Error loading team count: $e');
+          debugPrint('Error loading additional dashboard data: $e');
         }
       }
 
@@ -203,6 +221,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildSidebar(String currentLocation) {
+    // Determine if user is owner
+    final isOwner = _userProfile?.role == 'owner';
+
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: Column(
@@ -217,43 +238,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // --- MAIN SECTION ---
                   if (!_isSidebarCollapsed) _buildSectionHeader('MAIN'),
                   if (!_isSidebarCollapsed)
                     const SizedBox(height: AppTheme.spacing2),
+
+                  // Inbox (Visible to All)
                   _buildNavItem(
                     icon: Icons.inbox_outlined,
                     activeIcon: Icons.inbox,
                     label: 'Inbox',
                     route: '/inbox',
-                    isSelected: currentLocation.startsWith('/inbox'),
+                    isSelected: currentLocation == '/inbox',
                   ),
+
+                  // Storage (Visible to All) - Moved here
+                  _buildNavItem(
+                    icon: Icons.cloud_outlined,
+                    activeIcon: Icons.cloud,
+                    label: 'Storage',
+                    route: '/storage',
+                    isSelected: currentLocation == '/storage',
+                  ),
+
+                  // Custom Inboxes List
+                  if (_customInboxes.isNotEmpty) ...[
+                    const SizedBox(height: AppTheme.spacing2),
+                    if (!_isSidebarCollapsed) _buildSectionHeader('INBOXES'),
+                    ..._customInboxes.map((inbox) {
+                      final route = '/custom-inbox/${inbox.id}';
+                      final isSelected = currentLocation == route;
+                      return _buildNavItem(
+                        icon: Icons.folder,
+                        activeIcon: Icons.folder_open,
+                        label: inbox.name,
+                        route: route,
+                        isSelected: isSelected,
+                        color: Color(inbox.color),
+                      );
+                    }),
+                  ],
 
                   const SizedBox(height: AppTheme.spacing6),
 
+                  // --- SETTINGS SECTION ---
                   if (!_isSidebarCollapsed) _buildSectionHeader('SETTINGS'),
                   if (!_isSidebarCollapsed)
                     const SizedBox(height: AppTheme.spacing2),
-                  _buildNavItem(
-                    icon: Icons.folder_outlined,
-                    activeIcon: Icons.folder,
-                    label: 'Manage Inboxes',
-                    route: '/custom-inboxes',
-                    isSelected: currentLocation == '/custom-inboxes',
-                  ),
-                  _buildNavItem(
-                    icon: Icons.credit_card_outlined,
-                    activeIcon: Icons.credit_card,
-                    label: 'Plans & Billing',
-                    route: '/plans',
-                    isSelected: currentLocation == '/plans',
-                  ),
-                  _buildNavItem(
-                    icon: Icons.people_outline,
-                    activeIcon: Icons.people,
-                    label: 'Team Members',
-                    route: '/team',
-                    isSelected: currentLocation == '/team',
-                  ),
+
+                  // Manage Inboxes (Owner Only)
+                  if (isOwner)
+                    _buildNavItem(
+                      icon: Icons.folder_outlined,
+                      activeIcon: Icons.folder,
+                      label: 'Manage Inboxes',
+                      route: '/custom-inboxes',
+                      isSelected: currentLocation == '/custom-inboxes',
+                    ),
+
+                  // Plans & Billing (Owner Only)
+                  if (isOwner)
+                    _buildNavItem(
+                      icon: Icons.credit_card_outlined,
+                      activeIcon: Icons.credit_card,
+                      label: 'Plans & Billing',
+                      route: '/plans',
+                      isSelected: currentLocation == '/plans',
+                    ),
+
+                  // Team Members (Owner Only for now, matching shared_mailbooox)
+                  if (isOwner)
+                    _buildNavItem(
+                      icon: Icons.people_outline,
+                      activeIcon: Icons.people,
+                      label: 'Team Members',
+                      route: '/team',
+                      isSelected: currentLocation == '/team',
+                    ),
+
+                  // Settings (Visible to All)
                   _buildNavItem(
                     icon: Icons.settings_outlined,
                     activeIcon: Icons.settings,
@@ -264,37 +327,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                   const SizedBox(height: AppTheme.spacing6),
 
-                  if (!_isSidebarCollapsed) _buildSectionHeader('CONNECTIONS'),
+                  // --- CONNECTIONS SECTION ---
+                  // Only show header if there are visible items
+                  if (!_isSidebarCollapsed &&
+                      (isOwner || true)) // Storage is visible to all
+                    _buildSectionHeader('CONNECTIONS'),
+
                   if (!_isSidebarCollapsed)
                     const SizedBox(height: AppTheme.spacing2),
-                  _buildNavItem(
-                    icon: Icons.email_outlined,
-                    activeIcon: Icons.email,
-                    label: 'Email Accounts',
-                    route: '/accounts',
-                    isSelected: currentLocation == '/accounts',
-                  ),
-                  _buildNavItem(
-                    icon: Icons.tag,
-                    activeIcon: Icons.tag, // Or custom asset
-                    label: 'Slack',
-                    route: '/slack',
-                    isSelected: currentLocation == '/slack',
-                  ),
-                  _buildNavItem(
-                    icon: Icons.chat_outlined,
-                    activeIcon: Icons.chat,
-                    label: 'WhatsApp',
-                    route: '/whatsapp',
-                    isSelected: currentLocation == '/whatsapp',
-                  ),
-                  _buildNavItem(
-                    icon: Icons.cloud_outlined,
-                    activeIcon: Icons.cloud,
-                    label: 'Storage',
-                    route: '/storage',
-                    isSelected: currentLocation == '/storage',
-                  ),
+
+                  // Email Accounts (Owner Only)
+                  if (isOwner)
+                    _buildNavItem(
+                      icon: Icons.email_outlined,
+                      activeIcon: Icons.email,
+                      label: 'Email Accounts',
+                      route: '/accounts',
+                      isSelected: currentLocation == '/accounts',
+                    ),
+
+                  // Slack (Owner Only)
+                  if (isOwner)
+                    _buildNavItem(
+                      icon: Icons.tag,
+                      activeIcon: Icons.tag,
+                      label: 'Slack',
+                      route: '/slack',
+                      isSelected: currentLocation == '/slack',
+                    ),
+
+                  // WhatsApp (Owner Only)
+                  if (isOwner)
+                    _buildNavItem(
+                      icon: Icons.chat_outlined,
+                      activeIcon: Icons.chat,
+                      label: 'WhatsApp',
+                      route: '/whatsapp',
+                      isSelected: currentLocation == '/whatsapp',
+                    ),
                 ],
               ),
             ),
@@ -384,6 +454,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     required String label,
     required String route,
     bool isSelected = false,
+    Color? color,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
@@ -394,7 +465,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onTap: () => context.go(route),
           borderRadius: BorderRadius.circular(AppTheme.radiusMd),
           hoverColor: AppTheme.gray100,
-          splashColor: AppTheme.primary.withOpacity(0.08),
+          splashColor: (color ?? AppTheme.primary).withOpacity(0.08),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
             padding: EdgeInsets.symmetric(
@@ -404,14 +475,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
               vertical: AppTheme.spacing3,
             ),
             decoration: BoxDecoration(
-              color: isSelected ? AppTheme.primary.withOpacity(0.08) : null,
+              color: isSelected
+                  ? (color ?? AppTheme.primary).withOpacity(0.08)
+                  : null,
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
             ),
             child: Row(
               children: [
                 Icon(
                   isSelected ? activeIcon : icon,
-                  color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+                  color:
+                      color ??
+                      (isSelected ? AppTheme.primary : AppTheme.textSecondary),
                   size: 20,
                 ),
                 if (!_isSidebarCollapsed) ...[
@@ -421,7 +496,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       label,
                       style: AppTheme.bodyMd.copyWith(
                         color: isSelected
-                            ? AppTheme.primary
+                            ? (color ?? AppTheme.primary)
                             : Theme.of(context).textTheme.bodyMedium?.color,
                         fontWeight: isSelected
                             ? FontWeight.w600

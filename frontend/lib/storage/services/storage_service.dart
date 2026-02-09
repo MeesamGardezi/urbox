@@ -178,33 +178,16 @@ class StorageService {
     }
   }
 
-  /// Get download URL (presigned)
+  /// Get headers public getter
+  Map<String, String> get headers => _headers;
+
+  /// Get download URL (proxied through backend)
   Future<String> getDownloadUrl(String key) async {
-    try {
-      print('[StorageService] Getting download URL for: "$key"');
-      final encodedKey = Uri.encodeFull(key);
-
-      // Use presigned download URL for direct browser access
-      final uri = Uri.parse(
-        AppConfig.storagePresignedDownloadEndpoint(encodedKey),
-      );
-
-      final response = await http.get(uri, headers: _headers);
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        print('[StorageService] Got download URL: ${data['presignedUrl']}');
-        return data['presignedUrl'];
-      } else {
-        print('[StorageService] Failed to get presigned URL: ${response.body}');
-        // Fallback to direct download endpoint
-        return AppConfig.storageDownloadEndpoint(encodedKey);
-      }
-    } catch (e) {
-      print('[StorageService] Get download URL exception: $e');
-      // Fallback to direct download endpoint
-      return AppConfig.storageDownloadEndpoint(Uri.encodeFull(key));
-    }
+    // Return backend proxy URL directly to avoid CORS issues with R2
+    // The UI must pass the authentication headers (x-company-id) using the headers getter
+    final encodedKey = Uri.encodeFull(key);
+    final url = AppConfig.storageDownloadEndpoint(encodedKey);
+    return companyId != null ? '$url?companyId=$companyId' : url;
   }
 
   /// Rename a file or folder

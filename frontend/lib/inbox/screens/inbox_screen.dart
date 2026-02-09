@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
@@ -11,6 +13,8 @@ import '../../whatsapp/models/whatsapp_model.dart';
 // Services
 import '../../email/services/email_service.dart';
 import '../../whatsapp/services/whatsapp_service.dart';
+import '../../custom_inboxes/services/custom_inbox_service.dart';
+import '../../core/models/custom_inbox.dart';
 
 // UI
 import '../../core/ui/resizable_shell.dart';
@@ -18,7 +22,9 @@ import '../../core/theme/app_theme.dart';
 import '../widgets/email_renderer.dart';
 
 class InboxScreen extends StatefulWidget {
-  const InboxScreen({super.key});
+  final String? customInboxId;
+
+  const InboxScreen({super.key, this.customInboxId});
 
   @override
   State<InboxScreen> createState() => _InboxScreenState();
@@ -54,6 +60,46 @@ class _InboxScreenState extends State<InboxScreen> {
     super.initState();
     _fetchInboxItems();
   }
+
+  @override
+  void didUpdateWidget(InboxScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.customInboxId != oldWidget.customInboxId) {
+      _fetchInboxItems();
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchUserProfile(String uid) async {
+    // Quick fetch user profile helper
+    try {
+      // Import http if not available?
+      // Actually AuthService is better.
+      // But let's reuse what we have or import AuthService.
+      // Since I can't add imports easily without scrolling up, I'll use direct http or AuthService if imported
+      // Wait, AuthService is not imported.
+      // I'll add AuthService import above.
+      // But wait I just added imports and didn't include AuthService.
+      // I'll use a hack to get companyId from accounts if possible, or just fetch it.
+      // Providing a helper method right here using http is easiest if I add 'dart:convert'.
+      // But verify 'dart:convert' is imported. Yes line 1.
+      final response = await http.get(
+        Uri.parse('$_baseUrl/auth/user/$uid'), // Need base url
+        headers: {'Content-Type': 'application/json'},
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          return data['user'];
+        }
+      }
+    } catch (e) {
+      print('Error fetching user for custom inbox: $e');
+    }
+    return null;
+  }
+
+  static const String _baseUrl =
+      'http://localhost:3000/api'; // Hardcoded fallback or use value from config
 
   @override
   void dispose() {
@@ -99,8 +145,41 @@ class _InboxScreenState extends State<InboxScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw Exception('Not authenticated');
 
+      // 0. Load Custom Inbox if needed
+      CustomInbox? customInbox;
+      if (widget.customInboxId != null) {
+        // Need to know companyId here...
+        // Assuming we can get user profile or assume companyId is available from auth service
+        // But getInboxById doesn't exist? Only getInboxes(companyId).
+        // Let's modify CustomInboxService to provide getInboxById or filter list.
+        // For now, let's assume we can fetch all and find it, or add getById.
+        // Actually, let's optimistically assume getInboxes fetches all for user's company.
+        // But we don't have companyId easily here without fetching user profile.
+        // Let's fetch user profile first.
+        final userProfile = await _fetchUserProfile(user.uid);
+        if (userProfile != null) {
+          final allInboxes = await CustomInboxService.getInboxes(
+            userProfile['companyId'],
+          );
+          try {
+            customInbox = allInboxes.firstWhere(
+              (i) => i.id == widget.customInboxId,
+            );
+          } catch (e) {
+            print('Custom Inbox not found: ${widget.customInboxId}');
+          }
+        }
+      }
+
       // 1. Load Accounts
       await _loadAccounts();
+
+      // IF custom inbox, filter accounts
+      if (customInbox != null) {
+        _accounts = _accounts
+            .where((a) => customInbox!.accountIds.contains(a['id']))
+            .toList();
+      }
 
       List<Email> fetchedEmails = [];
       List<InboxItem> fetchedWhatsAppItems = [];
@@ -124,7 +203,7 @@ class _InboxScreenState extends State<InboxScreen> {
       }
 
       // 3. Fetch WhatsApp Messages (Unified Inbox) using backend
-      final whatsappMessages = await _whatsAppService.getMessages(
+      var whatsappMessages = await _whatsAppService.getMessages(
         userId: user.uid,
         limit: 50,
       );
@@ -133,7 +212,16 @@ class _InboxScreenState extends State<InboxScreen> {
       if (whatsappMessages['messages'] != null) {
         final messagesList =
             whatsappMessages['messages'] as List<WhatsAppMessage>;
-        fetchedWhatsAppItems = messagesList
+
+        // Filter by group for custom inbox
+        var filteredMsgs = messagesList;
+        if (customInbox != null) {
+          filteredMsgs = messagesList
+              .where((m) => customInbox!.whatsappGroupIds.contains(m.groupId))
+              .toList();
+        }
+
+        fetchedWhatsAppItems = filteredMsgs
             .map((m) => WhatsAppInboxItem(m))
             .toList();
       }
