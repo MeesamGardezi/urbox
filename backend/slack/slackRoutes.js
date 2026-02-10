@@ -217,6 +217,30 @@ function createSlackRoutes(db) {
         }
     });
 
+    /**
+     * GET /messages
+     * Fetch recent messages from all tracked channels in this company
+     */
+    router.get('/messages', async (req, res) => {
+        const { companyId, limit, before } = req.query;
+
+        if (!companyId) {
+            return res.status(400).json({ error: 'Missing companyId' });
+        }
+
+        try {
+            const messages = await slackService.getMessages(
+                companyId,
+                limit ? parseInt(limit) : 20,
+                before
+            );
+            res.json({ messages });
+        } catch (err) {
+            console.error('[Slack] Get messages error:', err);
+            res.status(500).json({ error: 'Failed to fetch messages' });
+        }
+    });
+
     return router;
 }
 

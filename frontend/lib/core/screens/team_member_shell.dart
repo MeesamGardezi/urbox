@@ -203,6 +203,22 @@ class _TeamMemberShellState extends State<TeamMemberShell> {
                   ],
 
                   _buildNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    activeIcon: Icons.chat_bubble,
+                    label: 'Team Chat',
+                    route: '/chat',
+                    isSelected: currentLocation == '/chat',
+                  ),
+
+                  _buildNavItem(
+                    icon: Icons.assignment_outlined,
+                    activeIcon: Icons.assignment,
+                    label: 'Assignments',
+                    route: '/assignments',
+                    isSelected: currentLocation == '/assignments',
+                  ),
+
+                  _buildNavItem(
                     icon: Icons.cloud_outlined,
                     activeIcon: Icons.cloud,
                     label: 'Storage',

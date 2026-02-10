@@ -45,6 +45,12 @@ class AppConfig {
   /// List/Delete Accounts endpoint
   static String get emailAccountsEndpoint => '$emailEndpoint/accounts';
 
+  /// Assignments endpoint
+  static const String assignmentsEndpoint = '$apiBaseUrl/api/assignments';
+
+  /// Chat endpoint
+  static const String chatEndpoint = '$apiBaseUrl/api/chat';
+
   // ============================================================================
   // WHATSAPP API ENDPOINTS
   // ============================================================================

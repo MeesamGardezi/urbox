@@ -16,6 +16,10 @@ import '../../slack/screens/slack_screen.dart';
 import '../../inbox/screens/inbox_screen.dart';
 import '../../custom_inboxes/screens/custom_inboxes_screen.dart';
 
+import '../../inbox/screens/main_inbox_screen.dart';
+import '../../assignments/assignments_screen.dart';
+import '../../chat/screens/chat_screen.dart';
+
 /// App Router Configuration
 ///
 /// DashboardScreen IS the app shell with sidebar.
@@ -109,10 +113,7 @@ class AppRouter {
             path: '/inbox',
             name: 'inbox',
             pageBuilder: (context, state) {
-              final customInboxId = state.uri.queryParameters['customInboxId'];
-              return NoTransitionPage(
-                child: InboxScreen(customInboxId: customInboxId),
-              );
+              return const NoTransitionPage(child: MainInboxScreen());
             },
           ),
 
@@ -188,6 +189,22 @@ class AppRouter {
             name: 'storage',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: StorageScreen()),
+          ),
+
+          // Assignments
+          GoRoute(
+            path: '/assignments',
+            name: 'assignments',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: AssignmentsScreen()),
+          ),
+
+          // Chat
+          GoRoute(
+            path: '/chat',
+            name: 'chat',
+            pageBuilder: (context, state) =>
+                const NoTransitionPage(child: ChatScreen()),
           ),
         ],
       ),

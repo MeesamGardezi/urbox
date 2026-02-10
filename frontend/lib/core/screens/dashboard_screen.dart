@@ -268,6 +268,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     isSelected: currentLocation == '/storage',
                   ),
 
+                  // Assignments (Visible to All)
+                  _buildNavItem(
+                    icon: Icons.assignment_outlined,
+                    activeIcon: Icons.assignment,
+                    label: 'Assignments',
+                    route: '/assignments',
+                    isSelected: currentLocation == '/assignments',
+                  ),
+
+                  // Team Chat (Visible to All)
+                  _buildNavItem(
+                    icon: Icons.chat_bubble_outline,
+                    activeIcon: Icons.chat_bubble,
+                    label: 'Team Chat',
+                    route: '/chat',
+                    isSelected: currentLocation == '/chat',
+                  ),
+
                   // Custom Inboxes List
                   if (_customInboxes.isNotEmpty) ...[
                     const SizedBox(height: AppTheme.spacing2),

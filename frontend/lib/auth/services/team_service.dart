@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../core/config/app_config.dart';
+import '../../core/models/team_member.dart';
 
 /// Team Management API Service
 ///
@@ -183,6 +184,48 @@ class TeamService {
       return json.decode(response.body);
     } catch (e) {
       return {'success': false, 'error': 'Network error: ${e.toString()}'};
+    }
+  }
+
+  /// Get team member details
+  static Future<TeamMember> getMember(String uid) async {
+    // Using Auth service endpoint as Team service doesn't have a direct member lookup
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConfig.authEndpoint}/user/$uid'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true && data['user'] != null) {
+          return TeamMember.fromMap(data['user']);
+        }
+      }
+      throw Exception('Failed to load member');
+    } catch (e) {
+      throw Exception('Error fetching member: $e');
+    }
+  }
+
+  /// Get all team members for a company
+  /// Returns a Stream to match usage in AddAssignmentDialog
+  static Stream<List<TeamMember>> getTeamMembers(String companyId) async* {
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/members/$companyId'),
+      );
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['success'] == true) {
+          final List list = data['members'];
+          yield list.map((m) => TeamMember.fromMap(m)).toList();
+        } else {
+          yield [];
+        }
+      } else {
+        yield [];
+      }
+    } catch (e) {
+      yield [];
     }
   }
 }

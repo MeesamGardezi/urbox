@@ -125,6 +125,8 @@ const createStorageRoutes = require('./storage/storage');
 const createEmailRoutes = require('./email/emailRoutes');
 const createSlackRoutes = require('./slack/slackRoutes');
 const createCustomInboxRoutes = require('./custom-inbox/customInboxRoutes');
+const createAssignmentRoutes = require('./assignments/assignmentsRoutes');
+const createChatRoutes = require('./chat/chatRoutes');
 const { StorageService } = require('./storage/storage-service');
 
 // Initialize Storage Service
@@ -193,6 +195,8 @@ app.use('/api/storage', createStorageRoutes(storageService, db));
 app.use('/api/email', createEmailRoutes(db));
 app.use('/api/slack', createSlackRoutes(db));
 app.use('/api/custom-inbox', createCustomInboxRoutes(db));
+app.use('/api/assignments', createAssignmentRoutes(db));
+app.use('/api/chat', createChatRoutes(db));
 
 // ============================================================================
 // ERROR HANDLERS

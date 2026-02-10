@@ -13,8 +13,6 @@ import '../../slack/models/slack_message.dart';
 import '../../email/services/email_service.dart';
 import '../../whatsapp/services/whatsapp_service.dart';
 import '../../slack/services/slack_service.dart';
-import '../../custom_inboxes/services/custom_inbox_service.dart';
-import '../../core/models/custom_inbox.dart';
 import '../../auth/services/auth_service.dart';
 
 // UI
@@ -22,16 +20,14 @@ import '../../core/ui/resizable_shell.dart';
 import '../../core/theme/app_theme.dart';
 import '../widgets/email_renderer.dart';
 
-class InboxScreen extends StatefulWidget {
-  final String? customInboxId;
-
-  const InboxScreen({super.key, this.customInboxId});
+class MainInboxScreen extends StatefulWidget {
+  const MainInboxScreen({super.key});
 
   @override
-  State<InboxScreen> createState() => _InboxScreenState();
+  State<MainInboxScreen> createState() => _MainInboxScreenState();
 }
 
-class _InboxScreenState extends State<InboxScreen> {
+class _MainInboxScreenState extends State<MainInboxScreen> {
   // Services
   final EmailService _emailService = EmailService();
   final WhatsAppService _whatsAppService = WhatsAppService();
@@ -46,6 +42,16 @@ class _InboxScreenState extends State<InboxScreen> {
   InboxItem? _selectedItem;
   bool _isLoadingMore = false;
 
+  // Pagination State
+  final Map<String, dynamic> _cursors = {}; // Store cursors/offsets per source
+  bool _hasMoreEmails = true;
+  bool _hasMoreWhatsApp = true;
+  bool _hasMoreSlack = true;
+  bool _isFetching = false;
+
+  // Context Data
+  String? _companyId;
+
   // Filters
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
@@ -58,22 +64,6 @@ class _InboxScreenState extends State<InboxScreen> {
   void initState() {
     super.initState();
     _fetchInboxItems();
-  }
-
-  @override
-  void didUpdateWidget(InboxScreen oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.customInboxId != oldWidget.customInboxId) {
-      if (mounted) {
-        setState(() {
-          _items = [];
-          _allItems = [];
-          _isLoading = true;
-          _error = null;
-        });
-      }
-      _fetchInboxItems();
-    }
   }
 
   @override
@@ -110,26 +100,9 @@ class _InboxScreenState extends State<InboxScreen> {
     });
   }
 
-  // Pagination State
-  final Map<String, dynamic> _cursors = {}; // Store cursors/offsets per source
-  bool _hasMoreEmails = true;
-  bool _hasMoreWhatsApp = true;
-  bool _hasMoreSlack = true;
-  bool _isFetching = false; // Mutex for fetching
-
-  // Context Data
-  String? _companyId;
-  Set<String> _assignedAccountIds = {};
-  Set<String> _assignedWhatsAppGroupIds = {};
-  Set<String> _assignedSlackChannelIds = {};
-  CustomInbox? _currentCustomInbox;
-
   Future<void> _fetchInboxItems({bool isLoadMore = false}) async {
-    debugPrint('START _fetchInboxItems (isLoadMore: $isLoadMore)');
-    if (_isFetching) {
-      debugPrint('Already fetching, skipping.');
-      return;
-    }
+    debugPrint('START MainInbox _fetchInboxItems (isLoadMore: $isLoadMore)');
+    if (_isFetching) return;
     _isFetching = true;
 
     if (!isLoadMore) {
@@ -155,29 +128,20 @@ class _InboxScreenState extends State<InboxScreen> {
       if (user == null) throw Exception('Not authenticated');
 
       if (!isLoadMore) {
-        debugPrint('Loading context data...');
         await _loadContextData(user);
-        debugPrint(
-          'Context loaded. Accounts: ${_accounts.length}, CompanyId: $_companyId',
-        );
       }
 
       List<Future<List<InboxItem>>> tasks = [];
 
       // Email Task
       if (_hasMoreEmails && _accounts.isNotEmpty) {
-        debugPrint('Fetching emails...');
         tasks.add(_fetchEmails(isLoadMore));
       } else {
-        debugPrint(
-          'Skipping emails (hasMore: $_hasMoreEmails, accounts: ${_accounts.length})',
-        );
         tasks.add(Future.value([]));
       }
 
       // WhatsApp Task
       if (_hasMoreWhatsApp) {
-        debugPrint('Fetching WhatsApp...');
         tasks.add(_fetchWhatsApp(user.uid, isLoadMore));
       } else {
         tasks.add(Future.value([]));
@@ -185,12 +149,8 @@ class _InboxScreenState extends State<InboxScreen> {
 
       // Slack Task
       if (_hasMoreSlack && _companyId != null) {
-        debugPrint('Fetching Slack (CompanyId: $_companyId)...');
         tasks.add(_fetchSlack(_companyId!, isLoadMore));
       } else {
-        debugPrint(
-          'Skipping Slack (hasMore: $_hasMoreSlack, CompanyId: $_companyId)',
-        );
         tasks.add(Future.value([]));
       }
 
@@ -200,14 +160,10 @@ class _InboxScreenState extends State<InboxScreen> {
       final newSlack = results[2];
 
       debugPrint(
-        'Fetched: ${newEmails.length} emails, ${newWhatsApp.length} WA, ${newSlack.length} Slack',
+        'MainInbox Fetched: ${newEmails.length} emails, ${newWhatsApp.length} WA, ${newSlack.length} Slack',
       );
 
       final allNewItems = [...newEmails, ...newWhatsApp, ...newSlack];
-
-      if (isLoadMore && allNewItems.isEmpty) {
-        debugPrint('No new items fetched in loadMore.');
-      }
 
       setState(() {
         if (!isLoadMore) {
@@ -222,7 +178,6 @@ class _InboxScreenState extends State<InboxScreen> {
         _allItems.sort((a, b) => b.date.compareTo(a.date));
 
         _filterItems();
-        debugPrint('Total items after filter: ${_items.length}');
         _isLoading = false;
         _isLoadingMore = false;
       });
@@ -238,7 +193,6 @@ class _InboxScreenState extends State<InboxScreen> {
     } finally {
       _isFetching = false;
       if (mounted) {
-        // double check loading states
         setState(() {
           _isLoading = false;
           _isLoadingMore = false;
@@ -248,7 +202,7 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Future<void> _loadContextData(User user) async {
-    // 1. Get User Profile
+    // 1. Get User Profile for Company ID
     final profileResponse = await AuthService.getUserProfile(user.uid);
     if (profileResponse['success'] != true)
       throw Exception('Failed to load user profile');
@@ -256,49 +210,8 @@ class _InboxScreenState extends State<InboxScreen> {
     final userData = profileResponse['user'];
     _companyId = userData['companyId']?.toString();
 
-    // 2. Load Custom Inboxes
-    List<CustomInbox> allInboxes = [];
-    if (_companyId != null && _companyId!.isNotEmpty) {
-      try {
-        allInboxes = await CustomInboxService.getInboxes(_companyId!);
-      } catch (e) {
-        debugPrint('Warning: Failed to load custom inboxes: $e');
-      }
-    }
-
-    // 3. Determine Filters
-    _assignedAccountIds.clear();
-    _assignedWhatsAppGroupIds.clear();
-    _assignedSlackChannelIds.clear();
-    _currentCustomInbox = null;
-
-    if (widget.customInboxId != null) {
-      try {
-        _currentCustomInbox = allInboxes.firstWhere(
-          (i) => i.id == widget.customInboxId,
-        );
-      } catch (_) {
-        throw Exception('Custom inbox not found');
-      }
-    } else {
-      for (var inbox in allInboxes) {
-        _assignedAccountIds.addAll(inbox.accountIds);
-        _assignedWhatsAppGroupIds.addAll(inbox.whatsappGroupIds);
-        _assignedSlackChannelIds.addAll(inbox.slackChannelIds);
-      }
-    }
-
-    // 4. Load & Filter Accounts
+    // 2. Load Accounts
     await _loadAccounts(user.uid);
-    if (_currentCustomInbox != null) {
-      _accounts = _accounts
-          .where((a) => _currentCustomInbox!.accountIds.contains(a['id']))
-          .toList();
-    } else {
-      _accounts = _accounts
-          .where((a) => !_assignedAccountIds.contains(a['id']))
-          .toList();
-    }
   }
 
   Future<void> _loadAccounts(String userId) async {
@@ -356,7 +269,8 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   Future<List<InboxItem>> _fetchWhatsApp(String userId, bool isLoadMore) async {
-    if (isLoadMore) return []; // Pagination not supported yet
+    if (isLoadMore)
+      return []; // Basic pagination not supported well yet for WhatsApp here
 
     try {
       final whatsappMessages = await _whatsAppService.getMessages(
@@ -364,29 +278,14 @@ class _InboxScreenState extends State<InboxScreen> {
         limit: 50,
       );
       if (whatsappMessages['messages'] != null) {
+        // WhatsAppService returns List<WhatsAppMessage>, not JSON
         final messagesList = (whatsappMessages['messages'] as List)
             .cast<WhatsAppMessage>();
 
         debugPrint(
-          'WhatsApp: Fetched ${messagesList.length} messages. Filtering...',
+          'MainInbox WhatsApp: Fetched ${messagesList.length} messages.',
         );
-
-        var filteredMsgs = messagesList;
-        if (_currentCustomInbox != null) {
-          // Custom Inbox: Only show assigned
-          filteredMsgs = messagesList
-              .where(
-                (m) =>
-                    _currentCustomInbox!.whatsappGroupIds.contains(m.groupId),
-              )
-              .toList();
-        } else {
-          // Main Inbox: Show ALL (No exclusion)
-          // filteredMsgs = messagesList;
-        }
-
-        debugPrint('WhatsApp: Returning ${filteredMsgs.length} messages.');
-        return filteredMsgs.map((m) => WhatsAppInboxItem(m)).toList();
+        return messagesList.map((m) => WhatsAppInboxItem(m)).toList();
       }
     } catch (e) {
       debugPrint('Error whatsapp: $e');
@@ -398,22 +297,13 @@ class _InboxScreenState extends State<InboxScreen> {
     try {
       String? beforeTimestamp;
       if (isLoadMore) {
-        // use cursor if available
         if (_cursors.containsKey('slack')) {
           beforeTimestamp = _cursors['slack'];
         } else {
-          // Fallback: find oldest slack message in current items
+          // Fallback logic
           final slackItems = _allItems.whereType<SlackInboxItem>().toList();
           if (slackItems.isNotEmpty) {
-            // Sort by date ascending to find oldest
             slackItems.sort((a, b) => a.date.compareTo(b.date));
-            // Slack timestamp is usually seconds.micro, but our model parses to DateTime.
-            // We need to convert back to string format if possible or store originalId.
-            // SlackService expects string timestamp.
-            // Best to use originalId from SlackMessage if available.
-            // Casting to SlackInboxItem to access underlying message is tricky unless we expose it.
-            // SlackInboxItem definition: class SlackInboxItem extends InboxItem { final SlackMessage _message; ... SlackMessage? get slackMessage => _message; }
-            // We can access .slackMessage
             beforeTimestamp = slackItems.first.slackMessage!.originalId;
           }
         }
@@ -428,9 +318,9 @@ class _InboxScreenState extends State<InboxScreen> {
       final messagesList = slackMessages
           .map((m) => SlackMessage.fromJson(m))
           .toList();
+      debugPrint('MainInbox Slack: Fetched ${messagesList.length} messages.');
 
       if (messagesList.isNotEmpty) {
-        // Update cursor to the *last* message's timestamp (oldest in this batch)
         final lastMsg = messagesList.last;
         _cursors['slack'] = lastMsg.originalId;
         _hasMoreSlack = messagesList.length >= 50;
@@ -438,25 +328,7 @@ class _InboxScreenState extends State<InboxScreen> {
         _hasMoreSlack = false;
       }
 
-      debugPrint(
-        'Slack: Fetched ${messagesList.length} messages. Filtering...',
-      );
-
-      var filteredMsgs = messagesList;
-      if (_currentCustomInbox != null) {
-        filteredMsgs = messagesList
-            .where(
-              (m) => _currentCustomInbox!.slackChannelIds.contains(m.channelId),
-            )
-            .toList();
-      } else {
-        // Main Inbox: Show ALL (No exclusion)
-        // filteredMsgs = messagesList;
-      }
-
-      debugPrint('Slack: Returning ${filteredMsgs.length} messages.');
-
-      return filteredMsgs.map((m) => SlackInboxItem(m)).toList();
+      return messagesList.map((m) => SlackInboxItem(m)).toList();
     } catch (e) {
       debugPrint('Error slack: $e');
       return [];
@@ -470,19 +342,14 @@ class _InboxScreenState extends State<InboxScreen> {
   Future<void> _markAsRead(InboxItem item) async {
     if (item.isRead) return;
 
-    // Optimistic update
     setState(() {
-      // We can't easily iterate and modify _allItems in place if types differ,
-      // but modifying properties of object works if mutable.
       if (item is EmailInboxItem && item.email != null) {
         item.email!.isRead = true;
       }
-      // For WhatsApp it's always read in model currently
     });
 
     if (item is EmailInboxItem && item.email != null) {
       final email = item.email!;
-      // Find the account for this email
       final account = _accounts.firstWhere(
         (acc) => acc['name'] == email.accountName,
         orElse: () => {},
@@ -490,7 +357,6 @@ class _InboxScreenState extends State<InboxScreen> {
 
       if (account.isNotEmpty) {
         String? uid;
-        // Simple UID extraction logic
         final parts = email.id.split('_');
         if (parts.length >= 3) {
           uid = parts.last;
@@ -516,7 +382,7 @@ class _InboxScreenState extends State<InboxScreen> {
             Text('Error loading inbox: $_error'),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: _fetchInboxItems,
+              onPressed: () => _fetchInboxItems(),
               child: const Text('Retry'),
             ),
           ],
@@ -539,9 +405,19 @@ class _InboxScreenState extends State<InboxScreen> {
       color: Colors.white,
       child: Column(
         children: [
-          // Search Bar
+          // Header
           Container(
             padding: const EdgeInsets.all(16),
+            alignment: Alignment.centerLeft,
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: AppTheme.border)),
+            ),
+            child: Text("All Messages", style: AppTheme.headingMd),
+          ),
+
+          // Search Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               border: Border(bottom: BorderSide(color: AppTheme.border)),
             ),
@@ -619,10 +495,8 @@ class _InboxScreenState extends State<InboxScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Avatar
               _buildAvatar(item),
               const SizedBox(width: 14),
-
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -724,7 +598,6 @@ class _InboxScreenState extends State<InboxScreen> {
   }
 
   String _formatDate(DateTime date) {
-    // Simple date formatting
     final now = DateTime.now();
     if (date.year == now.year &&
         date.month == now.month &&
@@ -739,7 +612,6 @@ class _InboxScreenState extends State<InboxScreen> {
       color: AppTheme.background,
       child: Column(
         children: [
-          // Toolbar
           Container(
             height: 56,
             padding: const EdgeInsets.symmetric(horizontal: 16),

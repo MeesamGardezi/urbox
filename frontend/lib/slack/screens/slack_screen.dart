@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/config/app_config.dart';
 import '../../core/theme/app_theme.dart';
+import '../../auth/services/auth_service.dart';
 import '../services/slack_service.dart';
+import '../models/slack_message.dart';
 import '../widgets/add_slack_dialog.dart';
 
 class SlackScreen extends StatefulWidget {
@@ -13,25 +16,79 @@ class SlackScreen extends StatefulWidget {
   State<SlackScreen> createState() => _SlackScreenState();
 }
 
-class _SlackScreenState extends State<SlackScreen> {
+class _SlackScreenState extends State<SlackScreen>
+    with SingleTickerProviderStateMixin {
   final _slackService = SlackService();
+
+  // User & Company
   String? _userId;
+  String? _companyId;
+
+  // Data
   List<dynamic> _accounts = [];
+  List<SlackMessage> _messages = [];
+  List<Map<String, dynamic>> _allTrackedChannels = [];
+
+  // UI State
   bool _isLoading = true;
+  bool _isLoadingMessages = false;
   String? _error;
+
+  // Tabs
+  late TabController _tabController;
+  int _selectedTab = 0;
+
+  // Search & Filter
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  String? _searchQuery;
+  String? _selectedChannelId;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
     super.initState();
-    _fetchUserAndAccounts();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) {
+        setState(() => _selectedTab = _tabController.index);
+        if (_selectedTab == 1 && _messages.isEmpty) {
+          _loadMessages();
+        }
+      }
+    });
+
+    _fetchUserAndData();
   }
 
-  Future<void> _fetchUserAndAccounts() async {
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _searchController.dispose();
+    _scrollController.dispose();
+    _debounceTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _fetchUserAndData() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         _userId = user.uid;
-        _fetchAccounts();
+
+        // Fetch Company ID
+        final userProfile = await AuthService.getUserProfile(_userId!);
+        if (userProfile['success'] == true) {
+          final userData = userProfile['user'] as Map<String, dynamic>;
+          _companyId = userData['companyId'];
+        }
+
+        await _fetchAccounts();
+
+        // If we have accounts and companyId, we can load messages if on that tab
+        if (_selectedTab == 1) {
+          _loadMessages();
+        }
       } else {
         setState(() {
           _error = 'User not authenticated';
@@ -59,17 +116,27 @@ class _SlackScreenState extends State<SlackScreen> {
     try {
       final accounts = await _slackService.getSlackAccounts(userId: _userId);
 
+      // Aggregate tracked channels for the filter
+      final List<Map<String, dynamic>> channels = [];
+      for (var account in accounts) {
+        final tracked = (account['trackedChannels'] as List?)
+            ?.map((e) => e as Map<String, dynamic>)
+            .toList();
+        if (tracked != null) {
+          channels.addAll(tracked);
+        }
+      }
+
       if (mounted) {
         setState(() {
           _accounts = accounts;
+          _allTrackedChannels = channels;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          // If 404/Empty and simply no accounts, we treat as empty
-          // But API currently returns error message if something fails
           _error = e.toString();
           _isLoading = false;
         });
@@ -77,23 +144,194 @@ class _SlackScreenState extends State<SlackScreen> {
     }
   }
 
+  Future<void> _loadMessages() async {
+    if (_companyId == null) return;
+
+    setState(() => _isLoadingMessages = true);
+
+    try {
+      final rawMessages = await _slackService.getMessages(
+        companyId: _companyId!,
+        limit: 50,
+      );
+
+      // Convert to models
+      var messages = rawMessages.map((m) => SlackMessage.fromJson(m)).toList();
+
+      // Client-side filtering
+      if (_selectedChannelId != null) {
+        messages = messages
+            .where((m) => m.channelId == _selectedChannelId)
+            .toList();
+      }
+      if (_searchQuery != null && _searchQuery!.isNotEmpty) {
+        final query = _searchQuery!.toLowerCase();
+        messages = messages.where((m) {
+          return m.body.toLowerCase().contains(query) ||
+              m.senderName.toLowerCase().contains(query);
+        }).toList();
+      }
+
+      // Sort by timestamp desc
+      messages.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      if (mounted) {
+        setState(() {
+          _messages = messages;
+          _isLoadingMessages = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading messages: $e');
+      if (mounted) {
+        setState(() => _isLoadingMessages = false);
+      }
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      setState(() {
+        _searchQuery = value.trim().isEmpty ? null : value.trim();
+      });
+      _loadMessages();
+    });
+  }
+
+  void _onChannelFilterChanged(String? channelId) {
+    setState(() {
+      _selectedChannelId = channelId;
+    });
+    _loadMessages();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppTheme.background,
-      child: Column(
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Scaffold(
+      backgroundColor: isDark
+          ? const Color(0xFF0F172A)
+          : const Color(0xFFF8FAFC),
+      body: Column(
         children: [
-          _buildHeader(),
-          Expanded(child: _buildContent()),
+          const SizedBox(height: 16),
+          // Custom Tab Selector
+          Container(
+            margin: const EdgeInsets.symmetric(horizontal: 24),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _buildCustomTab(
+                      index: 0,
+                      title: 'Connections',
+                      icon: Icons.link,
+                      isDark: isDark,
+                    ),
+                  ),
+                  Expanded(
+                    child: _buildCustomTab(
+                      index: 1,
+                      title: 'Messages',
+                      icon: Icons.message_outlined,
+                      isDark: isDark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              physics: const BouncingScrollPhysics(),
+              children: [
+                _buildConnectionsTab(isDark),
+                _buildMessagesTab(isDark),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildCustomTab({
+    required int index,
+    required String title,
+    required IconData icon,
+    required bool isDark,
+  }) {
+    final isSelected = _selectedTab == index;
+    final primaryColor = const Color(0xFF4A154B); // Slack Purple
+
+    return GestureDetector(
+      onTap: () {
+        _tabController.animateTo(index);
+        setState(() => _selectedTab = index);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? (isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9))
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(12),
+          border: isSelected
+              ? Border.all(color: primaryColor.withOpacity(0.3), width: 1)
+              : Border.all(color: Colors.transparent),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: isSelected
+                  ? primaryColor
+                  : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? primaryColor
+                    : (isDark ? Colors.grey.shade500 : Colors.grey.shade400),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // CONNECTIONS TAB
+  // ---------------------------------------------------------------------------
+
+  Widget _buildConnectionsTab(bool isDark) {
     if (_isLoading) {
       return const Center(
-        child: CircularProgressIndicator(color: AppTheme.primary),
+        child: CircularProgressIndicator(color: Color(0xFF4A154B)),
       );
     }
 
@@ -115,25 +353,31 @@ class _SlackScreenState extends State<SlackScreen> {
       );
     }
 
-    if (_accounts.isEmpty) {
-      return _buildEmptyState();
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(AppTheme.spacing6),
-      itemCount: _accounts.length,
-      itemBuilder: (context, index) {
-        return _buildAccountCard(_accounts[index]);
-      },
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 24),
+          if (_accounts.isEmpty)
+            _buildEmptyState()
+          else
+            ..._accounts.map((account) => _buildAccountCard(account)).toList(),
+        ],
+      ),
     );
   }
 
   Widget _buildHeader() {
     return Container(
       padding: const EdgeInsets.all(AppTheme.spacing6),
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppTheme.surface,
-        border: Border(bottom: BorderSide(color: AppTheme.border)),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.border),
+        boxShadow: const [
+          BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
+        ],
       ),
       child: Row(
         children: [
@@ -146,13 +390,6 @@ class _SlackScreenState extends State<SlackScreen> {
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(AppTheme.radiusMd),
-              boxShadow: const [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 4,
-                  offset: Offset(0, 2),
-                ),
-              ],
             ),
             child: const Icon(Icons.tag, color: Colors.white, size: 24),
           ),
@@ -173,7 +410,7 @@ class _SlackScreenState extends State<SlackScreen> {
           ElevatedButton.icon(
             onPressed: () => _showAddDialog(context),
             icon: const Icon(Icons.add, size: 18),
-            label: const Text('Connect Workspace'),
+            label: const Text('Connect'),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4A154B),
               foregroundColor: Colors.white,
@@ -195,11 +432,7 @@ class _SlackScreenState extends State<SlackScreen> {
               color: const Color(0xFF4A154B).withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: const Icon(
-              Icons.tag, // Slack icon placeholder
-              size: 64,
-              color: Color(0xFF4A154B),
-            ),
+            child: const Icon(Icons.tag, size: 64, color: Color(0xFF4A154B)),
           ),
           const SizedBox(height: AppTheme.spacing6),
           Text('No Slack workspaces connected', style: AppTheme.headingSm),
@@ -280,7 +513,7 @@ class _SlackScreenState extends State<SlackScreen> {
                   side: const BorderSide(color: Color(0xFF4A154B)),
                 ),
                 icon: const Icon(Icons.settings, size: 16),
-                label: const Text('Manage Channels'),
+                label: const Text('Manage'),
               ),
               const SizedBox(width: 8),
               IconButton(
@@ -311,7 +544,7 @@ class _SlackScreenState extends State<SlackScreen> {
               ),
               child: Center(
                 child: Text(
-                  'No channels tracked. Click "Manage Channels" to select.',
+                  'No channels tracked',
                   style: AppTheme.bodySm.copyWith(color: AppTheme.textMuted),
                 ),
               ),
@@ -340,6 +573,323 @@ class _SlackScreenState extends State<SlackScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // MESSAGES TAB
+  // ---------------------------------------------------------------------------
+
+  Widget _buildMessagesTab(bool isDark) {
+    if (_companyId == null && !_isLoading) {
+      return Center(
+        child: Text(
+          'Please connect a Slack account first.',
+          style: TextStyle(color: isDark ? Colors.grey : Colors.grey.shade700),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        // Search & Filter Bar
+        Container(
+          padding: const EdgeInsets.all(16),
+          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+          child: Row(
+            children: [
+              // Search
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: _onSearchChanged,
+                  style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search messages...',
+                    hintStyle: TextStyle(
+                      color: isDark
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade400,
+                    ),
+                    prefixIcon: Icon(
+                      Icons.search,
+                      color: isDark
+                          ? Colors.grey.shade500
+                          : Colors.grey.shade400,
+                    ),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Channel Filter
+              Expanded(
+                flex: 1,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return DropdownMenu<String?>(
+                      width: constraints.maxWidth,
+                      initialSelection: _selectedChannelId,
+                      onSelected: _onChannelFilterChanged,
+                      dropdownMenuEntries: [
+                        const DropdownMenuEntry<String?>(
+                          value: null,
+                          label: 'All Channels',
+                        ),
+                        ..._allTrackedChannels.map((channel) {
+                          return DropdownMenuEntry<String?>(
+                            value: channel['id'],
+                            label: channel['name'] ?? 'Unknown',
+                          );
+                        }),
+                      ],
+                      inputDecorationTheme: InputDecorationTheme(
+                        filled: true,
+                        fillColor: isDark
+                            ? const Color(0xFF1E293B)
+                            : Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      menuStyle: MenuStyle(
+                        backgroundColor: MaterialStateProperty.all(
+                          isDark ? const Color(0xFF1E293B) : Colors.white,
+                        ),
+                      ),
+                      trailingIcon: Icon(
+                        Icons.filter_list,
+                        size: 20,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                      selectedTrailingIcon: Icon(
+                        Icons.filter_list,
+                        size: 20,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade600,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        // Messages List
+        Expanded(
+          child: RefreshIndicator(
+            onRefresh: () async {
+              _loadMessages();
+            },
+            color: const Color(0xFF4A154B),
+            child: _isLoadingMessages
+                ? const Center(
+                    child: CircularProgressIndicator(color: Color(0xFF4A154B)),
+                  )
+                : _messages.isEmpty
+                ? _buildNoMessagesState(isDark)
+                : ListView.separated(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                    itemCount: _messages.length,
+                    separatorBuilder: (ctx, i) => const SizedBox(height: 8),
+                    itemBuilder: (context, index) {
+                      return _buildMessageCard(_messages[index], isDark);
+                    },
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoMessagesState(bool isDark) {
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: Container(
+        height: 400,
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.chat_bubble_outline,
+              size: 64,
+              color: isDark ? Colors.grey.shade600 : Colors.grey.shade400,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _searchQuery != null ? 'No matches found' : 'No messages yet',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Messages from tracked channels will appear here',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.grey.shade500 : Colors.grey.shade500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageCard(SlackMessage message, bool isDark) {
+    return Card(
+      elevation: 0,
+      color: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header: Channel and Time
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.numbers,
+                        size: 14,
+                        color: Colors.grey.shade500,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          message.channelName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: isDark
+                                ? Colors.grey.shade300
+                                : Colors.grey.shade700,
+                          ),
+                        ),
+                      ),
+                      if (message.accountName != null) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF4A154B).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            message.accountName!,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFF4A154B),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                Text(
+                  _formatTime(message.timestamp),
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            // Sender
+            Text(
+              message.senderName,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF4A154B),
+              ),
+            ),
+            const SizedBox(height: 4),
+
+            // Media Indicator
+            if (message.hasMedia)
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.black26 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.image, size: 14, color: Colors.grey.shade600),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Media Attached',
+                      style: TextStyle(
+                        fontStyle: FontStyle.italic,
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Body
+            if (message.body.isNotEmpty)
+              Text(
+                message.body,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.4,
+                  color: isDark ? Colors.grey.shade200 : Colors.black87,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(DateTime time) {
+    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
+  }
+
+  // ---------------------------------------------------------------------------
+  // DIALOGS & HELPER CLASSES
+  // ---------------------------------------------------------------------------
+
   void _showManageChannelsDialog(
     String accountId,
     List<Map<String, dynamic>> currentTracked,
@@ -349,7 +899,7 @@ class _SlackScreenState extends State<SlackScreen> {
       builder: (context) => _ManageChannelsDialog(
         accountId: accountId,
         currentlyTracked: currentTracked,
-        onSave: _fetchAccounts, // Refresh parent list after save
+        onSave: _fetchAccounts,
       ),
     );
   }
@@ -368,7 +918,6 @@ class _SlackScreenState extends State<SlackScreen> {
   }
 
   void _connectSlack() {
-    // We rely on backend resolving companyId via userId (LOOKUP)
     final url = AppConfig.slackAuthUrl('LOOKUP', _userId!);
     _openOAuthWebView(url);
   }

@@ -149,6 +149,92 @@ class SlackService {
             throw error;
         }
     }
+    async getMessages(companyId, limit = 20, before = null) {
+        try {
+            // 1. Get all accounts
+            const accounts = await this.listAccounts(companyId);
+            const allMessages = [];
+
+            // 2. Process each account
+            for (const accountWithoutToken of accounts) {
+                try {
+                    // Need to fetch full doc to get trackedChannels if listAccounts filters it?
+                    // listAccounts returns "safeData". Let's verify if trackedChannels is safe. 
+                    // It should be. But let's check the verify. 
+                    // Actually listAccounts excludes 'oauth'. 
+                    // We need to re-fetch or trust listAccounts.
+                    // To be safe and get token, we need the doc content anyway for getValidToken.
+
+                    const doc = await this.db.collection('slackAccounts').doc(accountWithoutToken.id).get();
+                    if (!doc.exists) continue;
+                    const account = { id: doc.id, ...doc.data() };
+
+                    // 3. Get Token
+                    const tokenResult = await this.oauthManager.getValidToken(account, 'slack');
+                    if (tokenResult.error) {
+                        console.warn(`[SlackService] Token error for account ${account.name}: ${tokenResult.error}`);
+                        continue;
+                    }
+
+                    const client = new WebClient(tokenResult.accessToken);
+                    const trackedChannels = account.trackedChannels || [];
+
+                    // 4. Fetch from tracked channels
+                    for (const channel of trackedChannels) {
+                        try {
+                            // Only fetch if channel ID is valid
+                            if (!channel.id) continue;
+
+                            const params = {
+                                channel: channel.id,
+                                limit: limit,
+                            };
+                            if (before) {
+                                params.latest = before;
+                            }
+
+                            const history = await client.conversations.history(params);
+
+                            if (history.ok && history.messages) {
+                                // 5. Normalize
+                                const messages = history.messages.map(msg => ({
+                                    id: `slack_${msg.ts}`,
+                                    originalId: msg.ts,
+                                    platform: 'slack',
+                                    body: msg.text || '',
+                                    timestamp: new Date(parseFloat(msg.ts) * 1000),
+                                    sender: msg.user || 'Unknown', // We might need to resolve user names... skipping for speed
+                                    senderName: msg.username || msg.user || 'User', // Slack messages often just have user ID
+                                    channelId: channel.id,
+                                    channelName: channel.name,
+                                    accountId: account.id,
+                                    accountName: account.name,
+                                    teamId: account.teamId,
+                                    hasMedia: msg.files && msg.files.length > 0,
+                                    mediaUrl: msg.files && msg.files.length > 0 ? msg.files[0].url_private : null
+                                }));
+                                allMessages.push(...messages);
+                            }
+                        } catch (chanErr) {
+                            console.warn(`[SlackService] Failed to fetch channel ${channel.name}: ${chanErr.message}`);
+                        }
+                    }
+
+                } catch (accErr) {
+                    console.error(`[SlackService] Failed to process account ${accountWithoutToken.id}: ${accErr}`);
+                }
+            }
+
+            // 6. Sort and Limit
+            return allMessages
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, limit);
+
+        } catch (err) {
+            console.error('[SlackService] Get messages error:', err);
+            throw new Error('Failed to fetch slack messages');
+        }
+    }
 }
 
 module.exports = { SlackService };

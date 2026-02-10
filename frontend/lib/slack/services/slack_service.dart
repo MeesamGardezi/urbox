@@ -80,4 +80,28 @@ class SlackService {
       throw Exception('Failed to save tracked channels: $e');
     }
   }
+
+  Future<List<Map<String, dynamic>>> getMessages({
+    required String companyId,
+    int limit = 20,
+    String? before,
+  }) async {
+    try {
+      var url = '$_rootUrl/messages?companyId=$companyId&limit=$limit';
+      if (before != null) {
+        url += '&before=$before';
+      }
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return List<Map<String, dynamic>>.from(data['messages']);
+      } else {
+        throw Exception('Failed to load messages: ${response.body}');
+      }
+    } catch (e) {
+      throw Exception('Failed to load messages: $e');
+    }
+  }
 }

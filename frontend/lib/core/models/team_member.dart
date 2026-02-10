@@ -54,13 +54,17 @@ class TeamMember {
       status: json['status'] ?? 'active',
       invitedBy: json['invitedBy'],
       createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
+          ? DateTime.tryParse(json['createdAt'].toString())
           : null,
       updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
+          ? DateTime.tryParse(json['updatedAt'].toString())
           : null,
     );
   }
+
+  // Alias for compatibility
+  factory TeamMember.fromMap(Map<String, dynamic> map) =>
+      TeamMember.fromJson(map);
 
   Map<String, dynamic> toJson() {
     return {
