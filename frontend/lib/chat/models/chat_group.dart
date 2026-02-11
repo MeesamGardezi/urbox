@@ -8,6 +8,7 @@ class ChatGroup {
   final String type; // 'public', 'private', etc.
   final DateTime? updatedAt;
   final Map<String, dynamic>? lastMessage;
+  final List<String> members;
 
   ChatGroup({
     required this.id,
@@ -19,6 +20,7 @@ class ChatGroup {
     required this.type,
     this.updatedAt,
     this.lastMessage,
+    this.members = const [],
   });
 
   factory ChatGroup.fromJson(Map<String, dynamic> json) {
@@ -36,6 +38,7 @@ class ChatGroup {
           ? DateTime.tryParse(json['updatedAt'])
           : null,
       lastMessage: json['lastMessage'],
+      members: List<String>.from(json['members'] ?? []),
     );
   }
 }

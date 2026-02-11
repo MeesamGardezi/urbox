@@ -7,7 +7,8 @@ class AppConfig {
   // ============================================================================
 
   /// Base URL for the backend API
-  static const String apiBaseUrl = 'http://localhost:3000';
+  static const String apiBaseUrl = 'https://api.urbox.ai';
+  // static const String apiBaseUrl = 'http://localhost:3000';
 
   /// API Endpoints
   static const String authEndpoint = '$apiBaseUrl/api/auth';
@@ -85,13 +86,16 @@ class AppConfig {
 
   /// WhatsApp messages
   static String whatsappMessages({
-    required String userId,
+    String? userId,
+    String? companyId,
     String? groupId,
     int limit = 50,
     String? startAfter,
     String? searchQuery,
   }) {
-    var url = '$whatsappEndpoint/messages?userId=$userId&limit=$limit';
+    var url = '$whatsappEndpoint/messages?limit=$limit';
+    if (userId != null) url += '&userId=$userId';
+    if (companyId != null) url += '&companyId=$companyId';
     if (groupId != null) url += '&groupId=$groupId';
     if (startAfter != null) url += '&startAfter=$startAfter';
     if (searchQuery != null && searchQuery.isNotEmpty)

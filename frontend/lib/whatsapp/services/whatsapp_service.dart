@@ -263,14 +263,16 @@ class WhatsAppService {
   /// Get messages with caching
   /// Returns { 'messages': List<WhatsAppMessage>, 'hasMore': bool, 'lastDocId': String? }
   Future<Map<String, dynamic>> getMessages({
-    required String userId,
+    String? userId,
+    String? companyId,
     String? groupId,
     String? searchQuery,
     int limit = 50,
     String? startAfter,
     bool forceRefresh = false,
   }) async {
-    final cacheKey = '${userId}_${groupId ?? 'all'}_${searchQuery ?? ''}';
+    final cacheKey =
+        '${userId ?? companyId ?? 'unknown'}_${groupId ?? 'all'}_${searchQuery ?? ''}';
 
     // Check cache if not forcing refresh and no pagination (startAfter is null)
     if (!forceRefresh && startAfter == null) {
@@ -302,6 +304,7 @@ class WhatsAppService {
             Uri.parse(
               AppConfig.whatsappMessages(
                 userId: userId,
+                companyId: companyId,
                 groupId: groupId,
                 limit: limit,
                 startAfter: startAfter,

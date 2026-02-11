@@ -39,6 +39,51 @@ class EmailService {
         this.oauthManager = oauthManager;
         this.db = db;
         this.connectionPool = new Map(); // userId -> Map(accountId -> connection)
+
+        // Simple in-memory cache for email results
+        this.emailCache = new Map(); // cacheKey -> { data, timestamp }
+        this.CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+        this.MAX_CACHE_SIZE = 100;
+    }
+
+    /**
+     * Get cache key for email fetch
+     */
+    _getCacheKey(accountId, offset) {
+        return `${accountId}_${offset || 'initial'}`;
+    }
+
+    /**
+     * Get cached result if valid
+     */
+    _getCachedResult(cacheKey) {
+        const cached = this.emailCache.get(cacheKey);
+        if (!cached) return null;
+
+        const age = Date.now() - cached.timestamp;
+        if (age > this.CACHE_TTL) {
+            this.emailCache.delete(cacheKey);
+            return null;
+        }
+
+        console.log(`[Cache] Hit for ${cacheKey} (age: ${Math.round(age / 1000)}s)`);
+        return cached.data;
+    }
+
+    /**
+     * Store result in cache
+     */
+    _setCachedResult(cacheKey, data) {
+        // Implement simple LRU by deleting oldest if cache is full
+        if (this.emailCache.size >= this.MAX_CACHE_SIZE) {
+            const firstKey = this.emailCache.keys().next().value;
+            this.emailCache.delete(firstKey);
+        }
+
+        this.emailCache.set(cacheKey, {
+            data,
+            timestamp: Date.now()
+        });
     }
 
     /**
@@ -102,6 +147,13 @@ class EmailService {
      * Fetch from Gmail using OAuth
      */
     async _fetchFromGmail(account, pageToken) {
+        // Check cache first
+        const cacheKey = this._getCacheKey(account.id, pageToken);
+        const cached = this._getCachedResult(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const tokenInfo = await this.oauthManager.getValidToken(account, 'google');
 
         if (tokenInfo.error) {
@@ -130,33 +182,51 @@ class EmailService {
                 return { emails: [], pagination: { hasMore: false } };
             }
 
-            // Fetch full message details in parallel
-            const emails = await Promise.all(
-                messages.map(async (msg) => {
-                    try {
-                        const fullMessage = await gmail.users.messages.get({
-                            userId: 'me',
-                            id: msg.id,
-                            format: 'full'
-                        });
+            // Fetch full message details with controlled concurrency
+            const emails = [];
+            const CONCURRENCY_LIMIT = 10; // Fetch 10 messages at a time
 
-                        return this._parseGmailMessage(fullMessage.data, account);
-                    } catch (err) {
-                        console.error(`[Gmail] Error fetching message ${msg.id}:`, err.message);
-                        return null;
+            for (let i = 0; i < messages.length; i += CONCURRENCY_LIMIT) {
+                const chunk = messages.slice(i, i + CONCURRENCY_LIMIT);
+
+                const chunkResults = await Promise.allSettled(
+                    chunk.map(async (msg) => {
+                        try {
+                            const fullMessage = await gmail.users.messages.get({
+                                userId: 'me',
+                                id: msg.id,
+                                format: 'full'
+                            });
+                            return this._parseGmailMessage(fullMessage.data, account);
+                        } catch (err) {
+                            console.error(`[Gmail] Error fetching message ${msg.id}:`, err.message);
+                            return null;
+                        }
+                    })
+                );
+
+                // Extract successful results
+                for (const result of chunkResults) {
+                    if (result.status === 'fulfilled' && result.value !== null) {
+                        emails.push(result.value);
                     }
-                })
-            );
+                }
+            }
 
-            const validEmails = emails.filter(e => e !== null);
+            const validEmails = emails;
 
-            return {
+            const result = {
                 emails: validEmails,
                 pagination: {
                     nextPageToken: listResponse.data.nextPageToken,
                     hasMore: !!listResponse.data.nextPageToken
                 }
             };
+
+            // Cache the result
+            this._setCachedResult(cacheKey, result);
+
+            return result;
 
         } catch (err) {
             if (err.code === 401 || err.message?.includes('invalid_grant')) {
@@ -240,6 +310,13 @@ class EmailService {
      * Fetch from Microsoft using Graph API
      */
     async _fetchFromMicrosoft(account, skipToken) {
+        // Check cache first
+        const cacheKey = this._getCacheKey(account.id, skipToken);
+        const cached = this._getCachedResult(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const tokenInfo = await this.oauthManager.getValidToken(account, 'microsoft');
 
         if (tokenInfo.error) {
@@ -265,13 +342,18 @@ class EmailService {
             const messages = response.data.value || [];
             const emails = messages.map(msg => this._parseMicrosoftMessage(msg, account));
 
-            return {
+            const result = {
                 emails,
                 pagination: {
                     nextPageToken: response.data['@odata.nextLink'],
                     hasMore: !!response.data['@odata.nextLink']
                 }
             };
+
+            // Cache the result
+            this._setCachedResult(cacheKey, result);
+
+            return result;
 
         } catch (err) {
             if (err.response?.status === 401) {
@@ -311,6 +393,13 @@ class EmailService {
      * Fetch from IMAP using ImapFlow (modern library)
      */
     async _fetchFromIMAP(account, offset = 0) {
+        // Check cache first
+        const cacheKey = this._getCacheKey(account.id, offset);
+        const cached = this._getCachedResult(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
         const imapConfig = this._getImapConfig(account);
         if (!imapConfig) {
             console.error(`[IMAP] No credentials for ${account.email}`);
@@ -460,13 +549,18 @@ class EmailService {
             const nextOffset = numOffset + emails.length;
             const hasMore = start > 1;
 
-            return {
+            const result = {
                 emails,
                 pagination: {
                     nextOffset,
                     hasMore
                 }
             };
+
+            // Cache the result
+            this._setCachedResult(cacheKey, result);
+
+            return result;
 
         } catch (err) {
             console.error(`[IMAP:${account.email}] Connection error:`, err.message);

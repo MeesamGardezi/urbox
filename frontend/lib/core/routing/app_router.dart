@@ -205,6 +205,18 @@ class AppRouter {
             name: 'chat',
             pageBuilder: (context, state) =>
                 const NoTransitionPage(child: ChatScreen()),
+            routes: [
+              GoRoute(
+                path: ':groupId',
+                name: 'chatGroup',
+                pageBuilder: (context, state) {
+                  final groupId = state.pathParameters['groupId'];
+                  return NoTransitionPage(
+                    child: ChatScreen(initialGroupId: groupId),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),

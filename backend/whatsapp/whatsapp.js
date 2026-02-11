@@ -344,18 +344,26 @@ function createWhatsAppRoutes(db, sessionManager) {
     router.get('/messages', async (req, res) => {
         const { userId, companyId, groupId, limit = 50, startAfter, searchQuery } = req.query;
 
-        if (!userId) {
+        if (!userId && !companyId) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing userId parameter'
+                error: 'Missing userId or companyId parameter'
             });
         }
 
         try {
-            // Fetch all messages for user and sort/filter in memory to avoid index requirements
-            const snapshot = await db.collection('whatsappMessages')
-                .where('userId', '==', userId)
-                .get();
+            // Fetch messages by userId OR companyId
+            let query = db.collection('whatsappMessages');
+
+            if (companyId) {
+                // Fetch by companyId (for team members)
+                query = query.where('companyId', '==', companyId);
+            } else {
+                // Fetch by userId (for owner/backward compatibility)
+                query = query.where('userId', '==', userId);
+            }
+
+            const snapshot = await query.get();
 
             let allMessages = snapshot.docs.map(doc => ({
                 id: doc.id,

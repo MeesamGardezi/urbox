@@ -140,9 +140,10 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
         tasks.add(Future.value([]));
       }
 
-      // WhatsApp Task
+      // WhatsApp Task (use companyId if available, fallback to userId)
       if (_hasMoreWhatsApp) {
-        tasks.add(_fetchWhatsApp(user.uid, isLoadMore));
+        final idToUse = _companyId ?? user.uid;
+        tasks.add(_fetchWhatsApp(idToUse, isLoadMore));
       } else {
         tasks.add(Future.value([]));
       }
@@ -268,23 +269,58 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
     }
   }
 
-  Future<List<InboxItem>> _fetchWhatsApp(String userId, bool isLoadMore) async {
-    if (isLoadMore)
-      return []; // Basic pagination not supported well yet for WhatsApp here
-
+  Future<List<InboxItem>> _fetchWhatsApp(
+    String idToUse,
+    bool isLoadMore,
+  ) async {
     try {
-      final whatsappMessages = await _whatsAppService.getMessages(
-        userId: userId,
-        limit: 50,
-      );
+      String? startAfter;
+      if (isLoadMore) {
+        if (_cursors.containsKey('whatsapp')) {
+          startAfter = _cursors['whatsapp'];
+        } else {
+          // Fallback: find oldest WhatsApp message timestamp
+          final whatsappItems = _allItems
+              .whereType<WhatsAppInboxItem>()
+              .toList();
+          if (whatsappItems.isNotEmpty) {
+            whatsappItems.sort((a, b) => a.date.compareTo(b.date));
+            // Use the message ID as cursor
+            startAfter = whatsappItems.first.whatsappMessage!.id;
+          }
+        }
+      }
+
+      // Use companyId if available, otherwise userId for backward compatibility
+      final whatsappMessages = _companyId != null
+          ? await _whatsAppService.getMessages(
+              companyId: idToUse,
+              limit: 50,
+              startAfter: startAfter,
+            )
+          : await _whatsAppService.getMessages(
+              userId: idToUse,
+              limit: 50,
+              startAfter: startAfter,
+            );
+
       if (whatsappMessages['messages'] != null) {
-        // WhatsAppService returns List<WhatsAppMessage>, not JSON
         final messagesList = (whatsappMessages['messages'] as List)
             .cast<WhatsAppMessage>();
 
         debugPrint(
           'MainInbox WhatsApp: Fetched ${messagesList.length} messages.',
         );
+
+        // Update cursor and hasMore flag
+        if (messagesList.isNotEmpty) {
+          final lastMsg = messagesList.last;
+          _cursors['whatsapp'] = lastMsg.id;
+          _hasMoreWhatsApp = messagesList.length >= 50;
+        } else {
+          _hasMoreWhatsApp = false;
+        }
+
         return messagesList.map((m) => WhatsAppInboxItem(m)).toList();
       }
     } catch (e) {
@@ -337,33 +373,6 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
 
   Future<void> _loadMoreItems() async {
     await _fetchInboxItems(isLoadMore: true);
-  }
-
-  Future<void> _markAsRead(InboxItem item) async {
-    if (item.isRead) return;
-
-    setState(() {
-      if (item is EmailInboxItem && item.email != null) {
-        item.email!.isRead = true;
-      }
-    });
-
-    if (item is EmailInboxItem && item.email != null) {
-      final email = item.email!;
-      final account = _accounts.firstWhere(
-        (acc) => acc['name'] == email.accountName,
-        orElse: () => {},
-      );
-
-      if (account.isNotEmpty) {
-        String? uid;
-        final parts = email.id.split('_');
-        if (parts.length >= 3) {
-          uid = parts.last;
-        }
-        await _emailService.markAsRead(email.id, account, email.messageId, uid);
-      }
-    }
   }
 
   @override
@@ -480,7 +489,6 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
       child: InkWell(
         onTap: () {
           setState(() => _selectedItem = item);
-          if (!isRead) _markAsRead(item);
         },
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -683,43 +691,103 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
       return SelectionArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(email.subject, style: AppTheme.headingLg),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  CircleAvatar(
-                    child: Text(
-                      email.from.isNotEmpty ? email.from[0].toUpperCase() : '?',
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Subject
+                Text(email.subject, style: AppTheme.headingLg),
+                const SizedBox(height: 24),
+
+                // Sender Info
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: _getAvatarColor(email.from),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Center(
+                        child: Text(
+                          email.from.isNotEmpty
+                              ? email.from[0].toUpperCase()
+                              : '?',
+                          style: AppTheme.labelLg.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  email.from,
+                                  style: AppTheme.labelLg,
+                                ),
+                              ),
+                              Text(
+                                _formatDateTime(email.date),
+                                style: AppTheme.bodySm,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 2),
+                          Text('to me', style: AppTheme.bodySm),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // Email Body
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.border),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(email.from, style: AppTheme.labelMd),
-                      Text('to ${email.to}', style: AppTheme.bodySm),
-                    ],
+                  clipBehavior: Clip.hardEdge,
+                  child: EmailRenderer(
+                    htmlContent: email.html.isNotEmpty
+                        ? email.html
+                        : '<p>${email.text.replaceAll('\n', '<br>')}</p>',
                   ),
-                  const Spacer(),
-                  Text(
-                    DateFormat.yMMMd().add_jm().format(email.date),
-                    style: AppTheme.bodySm,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 32),
-              // Email content renderer
-              EmailRenderer(
-                htmlContent: email.html.isNotEmpty
-                    ? email.html
-                    : '<p>${email.text.replaceAll('\n', '<br>')}</p>',
-              ),
-            ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // Action Buttons
+                Wrap(
+                  spacing: 12,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.reply_outlined, size: 18),
+                      label: const Text('Reply'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: () {},
+                      icon: const Icon(Icons.forward_outlined, size: 18),
+                      label: const Text('Forward'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 48),
+              ],
+            ),
           ),
         ),
       );
@@ -729,42 +797,97 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
       return SelectionArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(msg.groupName, style: AppTheme.headingLg),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const CircleAvatar(
-                    backgroundColor: Colors.green,
-                    child: Icon(Icons.chat, color: Colors.white),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.green.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.chat_rounded,
+                        color: Colors.green,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(msg.groupName, style: AppTheme.headingMd),
+                          const SizedBox(height: 4),
+                          Text(
+                            'From ${msg.senderName} • ${_formatDateTime(msg.timestamp)}',
+                            style: AppTheme.bodySm,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // Message Content
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.border),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(msg.senderName, style: AppTheme.labelMd),
-                      Text(msg.senderNumber, style: AppTheme.bodySm),
+                      if (msg.hasMedia && msg.downloadUrl != null) ...[
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.attach_file,
+                              size: 18,
+                              color: Colors.green,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Media attachment',
+                              style: AppTheme.labelMd.copyWith(
+                                color: Colors.green,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 300),
+                            child: Image.network(msg.downloadUrl!),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      Text(
+                        msg.body,
+                        style: AppTheme.bodyLg.copyWith(
+                          color: AppTheme.textPrimary,
+                          height: 1.7,
+                        ),
+                      ),
                     ],
                   ),
-                  const Spacer(),
-                  Text(
-                    DateFormat.yMMMd().add_jm().format(msg.timestamp),
-                    style: AppTheme.bodySm,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 32),
-              if (msg.hasMedia && msg.downloadUrl != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Image.network(msg.downloadUrl!, height: 300),
                 ),
-              Text(msg.body, style: AppTheme.bodyLg),
-            ],
+                const SizedBox(height: 48),
+              ],
+            ),
           ),
         ),
       );
@@ -773,55 +896,134 @@ class _MainInboxScreenState extends State<MainInboxScreen> {
       return SelectionArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('#${msg.channelName}', style: AppTheme.headingLg),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  const CircleAvatar(
-                    backgroundColor: Colors.purple,
-                    child: Icon(Icons.tag, color: Colors.white),
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.purple.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.tag,
+                        color: Colors.purple,
+                        size: 24,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '#${msg.channelName}',
+                            style: AppTheme.headingMd,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'From ${msg.senderName} • ${_formatDateTime(msg.timestamp)}',
+                            style: AppTheme.bodySm,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 32),
+
+                // Message Content
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppTheme.border),
                   ),
-                  const SizedBox(width: 12),
-                  Column(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(msg.senderName, style: AppTheme.labelMd),
+                      if (msg.hasMedia && msg.mediaUrl != null) ...[
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.attach_file,
+                              size: 18,
+                              color: Colors.purple,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Media attachment',
+                              style: AppTheme.labelMd.copyWith(
+                                color: Colors.purple,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 300),
+                            child: Image.network(
+                              msg.mediaUrl!,
+                              errorBuilder: (c, e, s) =>
+                                  const Text('Unable to load media'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
                       Text(
-                        'in ${msg.accountName ?? 'Slack'}',
-                        style: AppTheme.bodySm,
+                        msg.body,
+                        style: AppTheme.bodyLg.copyWith(
+                          color: AppTheme.textPrimary,
+                          height: 1.7,
+                        ),
                       ),
                     ],
                   ),
-                  const Spacer(),
-                  Text(
-                    DateFormat.yMMMd().add_jm().format(msg.timestamp),
-                    style: AppTheme.bodySm,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 32),
-              const Divider(),
-              const SizedBox(height: 32),
-              if (msg.hasMedia && msg.mediaUrl != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Image.network(
-                    msg.mediaUrl!,
-                    height: 300,
-                    errorBuilder: (c, e, s) =>
-                        const Text('Unable to load private media'),
-                  ),
                 ),
-              Text(msg.body, style: AppTheme.bodyLg),
-            ],
+                const SizedBox(height: 48),
+              ],
+            ),
           ),
         ),
       );
     }
 
     return const Center(child: Text('Unknown item type'));
+  }
+
+  Color _getAvatarColor(String name) {
+    final colors = [
+      const Color(0xFF2563EB), // Blue
+      const Color(0xFF7C3AED), // Violet
+      const Color(0xFF059669), // Emerald
+      const Color(0xFFD97706), // Amber
+      const Color(0xFFDC2626), // Red
+      const Color(0xFF0891B2), // Cyan
+    ];
+    return colors[name.hashCode % colors.length];
+  }
+
+  String _formatDateTime(DateTime date) {
+    final now = DateTime.now();
+    final diff = now.difference(date);
+
+    if (diff.inDays < 1 && now.day == date.day) {
+      return DateFormat.jm().format(date);
+    } else if (diff.inDays < 7) {
+      return '${DateFormat.E().format(date)}, ${DateFormat.jm().format(date)}';
+    } else {
+      return DateFormat('MMM d, yyyy, h:mm a').format(date);
+    }
   }
 }

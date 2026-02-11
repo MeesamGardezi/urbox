@@ -7,6 +7,7 @@
  * - WhatsApp Session Management
  * - Route registration
  * - Middleware configuration
+ * - Socket.io configuration
  * 
  * Version: 1.0.0
  */
@@ -14,6 +15,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
+const { Server } = require("socket.io");
 const admin = require('firebase-admin');
 
 // Validate required environment variables
@@ -113,6 +116,39 @@ process.on('SIGINT', async () => {
 });
 
 // ============================================================================
+// EXPRESS APP & SOCKET.IO SETUP
+// ============================================================================
+
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Allow all origins for now
+        methods: ["GET", "POST"]
+    }
+});
+
+const PORT = process.env.PORT || 3004;
+
+// Middleware
+app.use(cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-company-id'],
+}));
+
+// Special handling for Stripe webhook - needs raw body
+app.use((req, res, next) => {
+    if (req.originalUrl === '/api/payment/webhook') {
+        next();
+    } else {
+        express.json({ limit: '10mb' })(req, res, next);
+    }
+});
+
+app.use(express.urlencoded({ extended: true }));
+
+// ============================================================================
 // IMPORT ROUTES
 // ============================================================================
 
@@ -131,27 +167,6 @@ const { StorageService } = require('./storage/storage-service');
 
 // Initialize Storage Service
 const storageService = new StorageService();
-
-// ============================================================================
-// EXPRESS APP SETUP
-// ============================================================================
-
-const app = express();
-const PORT = process.env.PORT || 3004;
-
-// Middleware
-app.use(cors());
-
-// Special handling for Stripe webhook - needs raw body
-app.use((req, res, next) => {
-    if (req.originalUrl === '/api/payment/webhook') {
-        next();
-    } else {
-        express.json({ limit: '10mb' })(req, res, next);
-    }
-});
-
-app.use(express.urlencoded({ extended: true }));
 
 // ============================================================================
 // HEALTH CHECK
@@ -196,7 +211,26 @@ app.use('/api/email', createEmailRoutes(db));
 app.use('/api/slack', createSlackRoutes(db));
 app.use('/api/custom-inbox', createCustomInboxRoutes(db));
 app.use('/api/assignments', createAssignmentRoutes(db));
-app.use('/api/chat', createChatRoutes(db));
+app.use('/api/chat', createChatRoutes(db, storageService, io)); // Pass io to chat routes
+
+// Socket.IO Connection Handler
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.id);
+
+    socket.on('join_group', (groupId) => {
+        socket.join(groupId);
+        console.log(`User ${socket.id} joined group ${groupId}`);
+    });
+
+    socket.on('leave_group', (groupId) => {
+        socket.leave(groupId);
+        console.log(`User ${socket.id} left group ${groupId}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected:', socket.id);
+    });
+});
 
 // ============================================================================
 // ERROR HANDLERS
@@ -235,7 +269,7 @@ async function startServer() {
         process.exit(1);
     }
 
-    app.listen(PORT, () => {
+    server.listen(PORT, () => {
         console.log('\n==========================================================');
         console.log('              URBOX BACKEND');
         console.log('==========================================================');
@@ -244,6 +278,7 @@ async function startServer() {
         console.log(`✓ App URL: ${process.env.APP_URL || 'http://localhost:8080'}`);
         console.log(`✓ Firestore: Connected`);
         console.log(`✓ WhatsApp: Session Manager Active`);
+        console.log(`✓ Socket.IO: Initialized`);
         console.log('\n📡 Available endpoints:');
         console.log('   GET  /health');
         console.log('   POST /api/auth/signup');

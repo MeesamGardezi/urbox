@@ -112,9 +112,7 @@ class EmailService {
   }) async {
     try {
       final response = await http.post(
-        Uri.parse(
-          '${AppConfig.apiBaseUrl}/email/sync',
-        ), // Assuming this is the endpoint or I should check AppConfig
+        Uri.parse(AppConfig.emailEndpoint),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'accounts': accounts, 'offsets': offsets ?? {}}),
       );
